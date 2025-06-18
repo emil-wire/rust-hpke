@@ -31,6 +31,7 @@ Here are all the primitives listed in the spec. The primitives with checked boxe
     - [X] DHKEM(P-256, HKDF-SHA256)
     - [X] DHKEM(P-384, HKDF-SHA384)
     - [X] DHKEM(P-521, HKDF-SHA512)
+    - [x] Experimental: X-Wing(X25519, ML-KEM-768)
 * KDFs
     - [X] HKDF-SHA256
     - [X] HKDF-SHA384
@@ -52,6 +53,7 @@ Feature flag list:
 * `p256` - Enables NIST P-256-based KEMs
 * `p384` - Enables NIST P-384-based KEMs
 * `p521` - Enables NIST P-521-based KEMs
+* `x-wing` - Enables [experimental](https://datatracker.ietf.org/doc/html/draft-connolly-cfrg-xwing-kem-06) Hybrid PQ KEM X-Wing
 * `std` - Includes an implementation of `std::error::Error` for `HpkeError`. Also does what `alloc` does.
 
 For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).

@@ -11,6 +11,11 @@ use zeroize::Zeroize;
 mod dhkem;
 pub use dhkem::*;
 
+#[cfg(feature = "x-wing")]
+mod x_wing;
+#[cfg(feature = "x-wing")]
+pub use x_wing::XWing;
+
 /// Represents authenticated encryption functionality
 pub trait Kem: Sized {
     /// The key exchange's public key type. If you want to generate a keypair, see
@@ -222,5 +227,40 @@ mod tests {
 
         test_encap_correctness!(test_encap_correctness_p521, crate::kem::DhP521HkdfSha512);
         test_encapped_serialize!(test_encapped_serialize_p521, crate::kem::DhP521HkdfSha512);
+    }
+
+    #[cfg(feature = "x-wing")]
+    mod x_wing_tests {
+        use super::*;
+
+        test_encap_correctness!(test_encap_correctness_xwing, crate::kem::XWing);
+
+        /// Custom serialization test for X-Wing since the macro assumes Debug trait
+        #[test]
+        fn test_encapped_serialize_xwing() {
+            type Kem = crate::kem::XWing;
+
+            // Encapsulate a random shared secret
+            let encapped_key = {
+                let mut csprng = StdRng::from_os_rng();
+                let (_, pk_recip) = Kem::gen_keypair(&mut csprng);
+                Kem::encap(&pk_recip, None, &mut csprng).unwrap().1
+            };
+            // Serialize it
+            let encapped_key_bytes = encapped_key.to_bytes();
+            // Deserialize it
+            let new_encapped_key =
+                <<Kem as KemTrait>::EncappedKey as Deserializable>::from_bytes(
+                    &encapped_key_bytes,
+                )
+                    .unwrap();
+
+            // Compare via serialization since Debug is not available
+            assert_eq!(
+                new_encapped_key.to_bytes(),
+                encapped_key.to_bytes(),
+                "encapped key doesn't serialize correctly"
+            );
+        }
     }
 }
