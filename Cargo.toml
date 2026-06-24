@@ -20,6 +20,9 @@ rust-version = "1.85"
 # "chacha" enables ChaCha20-Poly1305 AEAD algorithm
 # "xwing" enables the use of X-Wing hybrid post-quantum KEM
 # "mlkem768p256" enables the use of MLKEM768-P256 hybrid post-quantum KEM
+# "mlkem1024p384" enables the use of MLKEM1024-P384 hybrid post-quantum KEM
+# "mlkem768" enables the use of the pure ML-KEM-768 post-quantum KEM
+# "mlkem1024" enables the use of the pure ML-KEM-1024 post-quantum KEM (implies mlkem768)
 default = ["getrandom", "alloc", "p256", "x25519", "aes", "chacha"]
 x25519 = ["dep:x25519-dalek"]
 p256 = ["dep:p256"]
@@ -29,12 +32,15 @@ aes = ["dep:aes-gcm"]
 chacha = ["dep:chacha20poly1305"]
 xwing = ["dep:x-wing"]
 mlkem768p256 = ["dep:ml-kem", "dep:p256"]
+mlkem1024p384 = ["dep:ml-kem", "dep:p384"]
+mlkem768 = ["dep:ml-kem"]
+mlkem1024 = ["mlkem768"]
 # Include allocating methods like open() and seal()
 alloc = []
 # Enable RNG-less top-level functions
 getrandom = ["dep:getrandom"]
 # Used to enable known-answer tests. Implies alloc and all other features
-kat = ["alloc", "x25519", "p256", "p384", "p521", "xwing", "mlkem768p256"]
+kat = ["alloc", "x25519", "p256", "p384", "p521", "xwing", "mlkem768p256", "mlkem1024p384", "mlkem768", "mlkem1024"]
 hazmat-streaming-enc = []
 
 [dependencies]

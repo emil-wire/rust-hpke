@@ -2,7 +2,8 @@ use crate::{
     aead::{Aead, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait, KdfShake128, KdfShake256},
     kem::{
-        DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, MlKem768P256,
+        DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait,
+        MlKem768P256, MlKem1024P384, MlKem768, MlKem1024,
         SharedSecret, X25519HkdfSha256, XWing,
     },
     op_mode::{OpModeR, PskBundle},
@@ -257,6 +258,23 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: MainTestVector) {
         );
     }
 
+    // Decap the vector's own ciphertext and check it reproduces the vector's shared secret. The
+    // setup_receiver path below tests decap indirectly; this pins it directly. Matters most for
+    // pure ML-KEM (kem_id 65/66), which has no other direct decap check.
+    //
+    // Base/Psk only: the authenticated modes mix the sender's static key into the shared secret,
+    // so an unauthenticated decap wouldn't match. ML-KEM is unauthenticated, always mode 0 here.
+    if tv.mode == 0 || tv.mode == 1 {
+        let provided_encapped_key =
+            <Kem as KemTrait>::EncappedKey::from_bytes(&tv.encapped_key).unwrap();
+        let decap_ss = Kem::decap(&sk_recip, None, &provided_encapped_key).expect("decap failed");
+        assert_eq!(
+            decap_ss.0.as_slice(),
+            tv.shared_secret.as_slice(),
+            "decap(vector_ciphertext) shared_secret doesn't match vector shared_secret"
+        );
+    }
+
     // We're going to test the encryption contexts. First, construct the appropriate OpMode.
     let mode = make_op_mode_r(
         tv.mode,
@@ -356,16 +374,27 @@ fn classical_pq_and_hybrid() {
         let file = File::open("test-vectors/pq-53273fb.json").unwrap();
         serde_json::from_reader(file).unwrap()
     };
-
+    
+    // Note: pure ML-KEM (kem 0x0041/0x0042) + SHAKE256 (kdf 0x0011) has no published vector.
+    // The hpke-pq vectors only pin pure ML-KEM under HKDF (A.2/A.3) and TurboSHAKE256 (A.13); the
+    // only SHAKE256 vector is X-Wing. (A.7 and A.11 are titled "SHAKE256" in draft-04 but their
+    // bodies use SHAKE128 / kdf 0x0010 - checked against the vector files.)
+    //
+    // I decided to pin the two halves separately rather than invent a vector: X-Wing covers the SHAKE256
+    // KDF, the HKDF vectors below cover ML-KEM encap/decap (plus the direct decap check in
+    // `test_case`). The exact composition is left to the round-trip tests elsewhere.
     for tv in ref_tvs.into_iter().chain(pq_tvs.into_iter()) {
-        // Ignore everything that doesn't use X25519, P256, P384, P521, XWing, or
-        // MLKEM768-P256, since that's all we support right now
+        // Ignore everything that doesn't use X25519, P256, P384, P521, XWing,
+        // MLKEM768-P256, MLKEM1024-P384, or MLKEM768/1024 since that's all we support right now
         if tv.kem_id != X25519HkdfSha256::KEM_ID
             && tv.kem_id != DhP256HkdfSha256::KEM_ID
             && tv.kem_id != DhP384HkdfSha384::KEM_ID
             && tv.kem_id != DhP521HkdfSha512::KEM_ID
             && tv.kem_id != XWing::KEM_ID
             && tv.kem_id != MlKem768P256::KEM_ID
+            && tv.kem_id != MlKem1024P384::KEM_ID
+            && tv.kem_id != MlKem768::KEM_ID
+            && tv.kem_id != MlKem1024::KEM_ID
         {
             continue;
         }
@@ -381,7 +410,10 @@ fn classical_pq_and_hybrid() {
                 DhP384HkdfSha384,
                 DhP521HkdfSha512,
                 XWing,
-                MlKem768P256
+                MlKem768P256,
+                MlKem1024P384,
+                MlKem768,
+                MlKem1024
             )
         );
 
@@ -420,8 +452,7 @@ struct HybridTestVector {
 struct HybridTestVectors {
     mlkem768_p256: Vec<HybridTestVector>,
     mlkem768_x25519: Vec<HybridTestVector>,
-    #[serde(skip)] // We don't support these yet
-    _mlkem1024_p384: Vec<HybridTestVector>,
+    mlkem1024_p384: Vec<HybridTestVector>,
 }
 
 // This known-answer test uses the test vectors from the concrete hybrid spec (see README for more
@@ -454,6 +485,32 @@ fn hybrid() {
 
         let enc = <MlKem768P256 as KemTrait>::EncappedKey::from_bytes(&tv.ciphertext).unwrap();
         let ss = MlKem768P256::decap(&dk, None, &enc).unwrap();
+        assert_eq!(ss.0.as_slice(), tv.shared_secret.as_slice());
+    }
+
+    // Test MLKEM1024-P384
+    for tv in hybrid_tvs.mlkem1024_p384 {
+        let dk =
+            <MlKem1024P384 as KemTrait>::PrivateKey::from_bytes(&tv.decapsulation_key).unwrap();
+        assert_eq!(
+            dk.dk_t.to_bytes().as_slice(),
+            tv.decapsulation_key_t.as_slice()
+        );
+        assert_eq!(
+            dk.dk_pq.to_bytes().as_slice(),
+            tv.decapsulation_key_pq.as_slice()
+        );
+
+        let ek =
+            <MlKem1024P384 as KemTrait>::PublicKey::from_bytes(&tv.encapsulation_key).unwrap();
+        assert_eq!(MlKem1024P384::sk_to_pk(&dk), ek);
+
+        let (ss, ct) = MlKem1024P384::encap_det(&ek, None, &tv.randomness).unwrap();
+        assert_eq!(ss.0.as_slice(), tv.shared_secret.as_slice());
+        assert_eq!(ct.to_bytes().as_slice(), tv.ciphertext);
+
+        let enc = <MlKem1024P384 as KemTrait>::EncappedKey::from_bytes(&tv.ciphertext).unwrap();
+        let ss = MlKem1024P384::decap(&dk, None, &enc).unwrap();
         assert_eq!(ss.0.as_slice(), tv.shared_secret.as_slice());
     }
 

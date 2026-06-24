@@ -19,6 +19,14 @@ pub use dhkem::*;
 pub mod mlkem768p256;
 #[cfg(feature = "mlkem768p256")]
 pub use mlkem768p256::MlKem768P256;
+#[cfg(feature = "mlkem1024p384")]
+pub mod mlkem1024p384;
+#[cfg(feature = "mlkem1024p384")]
+pub use mlkem1024p384::MlKem1024P384;
+#[cfg(feature = "mlkem768")]
+pub mod mlkem;
+#[cfg(feature = "mlkem768")]
+pub use mlkem::{MlKem1024, MlKem768};
 #[cfg(feature = "xwing")]
 pub mod xwing;
 #[cfg(feature = "xwing")]

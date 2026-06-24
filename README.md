@@ -61,6 +61,9 @@ Feature flag list:
 * `chacha` - Enables ChaCha20-Poly1305 AEAD algorithm
 * `xwing` - Enables the X-Wing (aka MLKEM768-X25519) hybrid post-quantum KEM
 * `mlkem768p256` - Enables the MLKEM768-P256 hybrid post-quantum KEM
+* `mlkem1024p384` - Enables the MLKEM1024-P384 hybrid post-quantum KEM
+* `mlkem768` - Enables the pure ML-KEM-768 post-quantum KEM
+* `mlkem1024` - Enables the pure ML-KEM-1024 post-quantum KEM (implies `mlkem768`)
 * `kat` - Used only to enabled known-answer tests, which require `std`. Only use with `cargo test`
 
 For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).
