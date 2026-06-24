@@ -22,7 +22,7 @@ rust-version = "1.85"
 # "mlkem768p256" enables the use of MLKEM768-P256 hybrid post-quantum KEM
 # "mlkem1024p384" enables the use of MLKEM1024-P384 hybrid post-quantum KEM
 # "mlkem768" enables the use of the pure ML-KEM-768 post-quantum KEM
-# "mlkem1024" enables the use of the pure ML-KEM-1024 post-quantum KEM (implies mlkem768)
+# "mlkem1024" enables the use of the pure ML-KEM-1024 post-quantum KEM
 default = ["getrandom", "alloc", "p256", "x25519", "aes", "chacha"]
 x25519 = ["dep:x25519-dalek"]
 p256 = ["dep:p256"]
@@ -34,7 +34,7 @@ xwing = ["dep:x-wing"]
 mlkem768p256 = ["dep:ml-kem", "dep:p256"]
 mlkem1024p384 = ["dep:ml-kem", "dep:p384"]
 mlkem768 = ["dep:ml-kem"]
-mlkem1024 = ["mlkem768"]
+mlkem1024 = ["dep:ml-kem"]
 # Include allocating methods like open() and seal()
 alloc = []
 # Enable RNG-less top-level functions

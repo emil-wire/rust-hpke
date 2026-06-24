@@ -1,5 +1,10 @@
 //! The MLKEM1024-P384 hybrid PQ KEM. Implemented as per <https://filippo.io/hpke-pq>,
 //! which itself derives from <https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-04>
+//!
+//! **EXPERIMENTAL:** this KEM is based on `draft-ietf-hpke-pq-04`,
+//! `draft-irtf-cfrg-concrete-hybrid-kems-03`, and `draft-irtf-cfrg-hybrid-kems-11` — all unratified
+//! IETF drafts. The construction and its identifiers are subject to change until the drafts are
+//! finalized, so the wire format is not yet stable. Treat this KEM as experimental.
 
 use crate::{
     kdf::one_stage_kdf,
@@ -123,7 +128,7 @@ impl Deserializable for PublicKey {
         let ek_pq = <MlKem1024 as KemCore>::EncapsulationKey::new(
             encoded_pq.try_into().expect("correct length"),
         )
-            .map_err(|_| HpkeError::ValidationError)?;
+        .map_err(|_| HpkeError::ValidationError)?;
 
         let ek_t =
             p384::Sec1Point::from_bytes(encoded_t).map_err(|_| HpkeError::ValidationError)?;
@@ -385,7 +390,7 @@ fn p384_random_scalar(seed: &[u8; 48]) -> p384::SecretKey {
     }
 
     // This happens with cryptographically negligible probability. With a single 48-byte block,
-    // the chance of rejection (sk == 0 or sk >= order) is < 2⁻¹⁹⁰ for P-384, so this is
+    // the chance of rejection (sk == 0 or sk >= order) is < 2⁻¹⁹² for P-384, so this is
     // effectively unreachable.
     panic!("Rejection sampling failed");
 }
@@ -496,7 +501,7 @@ mod tests {
             <<MlKem1024P384 as KemTrait>::EncappedKey as Deserializable>::from_bytes(
                 &encapped_key_bytes,
             )
-                .unwrap();
+            .unwrap();
 
         assert_eq!(
             new_encapped_key.to_bytes(),

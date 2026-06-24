@@ -31,18 +31,33 @@ Here are all the primitives listed in the spec. The primitives with checked boxe
     - [X] DHKEM(P-256, HKDF-SHA256)
     - [X] DHKEM(P-384, HKDF-SHA384)
     - [X] DHKEM(P-521, HKDF-SHA512)
-    - [X] MLKEM768-X25519, aka X-Wing
-    - [X] MLKEM768-P256
 * KDFs
     - [X] HKDF-SHA256
     - [X] HKDF-SHA384
     - [X] HKDF-SHA512
-    - [X] SHAKE128
-    - [X] SHAKE256
 * AEADs
     - [X] AES-GCM-128
     - [X] AES-GCM-256
     - [X] ChaCha20Poly1305
+
+Draft Post-quantum extensions
+-----------------------------
+
+The following primitives are not part of RFC 9180.
+They follow [draft-ietf-hpke-pq-04](https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-04), the HPKE post-quantum extension, which builds on the CFRG hybrid-KEM drafts and [FIPS 203](https://csrc.nist.gov/pubs/fips/203/final).
+They are subject to change, treat them as experimental.
+
+* KEMs
+    - [X] ML-KEM-768 (pure)
+    - [X] ML-KEM-1024 (pure)
+    - [X] MLKEM768-X25519, aka X-Wing
+    - [X] MLKEM768-P256
+    - [X] MLKEM1024-P384
+* KDFs
+    - [X] SHAKE128
+    - [X] SHAKE256
+
+The pure ML-KEM KEMs are specified in [draft-ietf-hpke-pq-04](https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-04) §3. The hybrid KEMs (MLKEM768-P256, MLKEM1024-P384) are specified by [draft-irtf-cfrg-concrete-hybrid-kems-03](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-concrete-hybrid-kems-03) and the generic [draft-irtf-cfrg-hybrid-kems-11](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hybrid-kems-11); X-Wing additionally by [draft-connolly-cfrg-xwing-kem-10](https://datatracker.ietf.org/doc/html/draft-connolly-cfrg-xwing-kem-10).
 
 Crate Features
 --------------
@@ -63,7 +78,7 @@ Feature flag list:
 * `mlkem768p256` - Enables the MLKEM768-P256 hybrid post-quantum KEM
 * `mlkem1024p384` - Enables the MLKEM1024-P384 hybrid post-quantum KEM
 * `mlkem768` - Enables the pure ML-KEM-768 post-quantum KEM
-* `mlkem1024` - Enables the pure ML-KEM-1024 post-quantum KEM (implies `mlkem768`)
+* `mlkem1024` - Enables the pure ML-KEM-1024 post-quantum KEM
 * `kat` - Used only to enabled known-answer tests, which require `std`. Only use with `cargo test`
 
 For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).

@@ -2,9 +2,8 @@ use crate::{
     aead::{Aead, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait, KdfShake128, KdfShake256},
     kem::{
-        DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait,
-        MlKem768P256, MlKem1024P384, MlKem768, MlKem1024,
-        SharedSecret, X25519HkdfSha256, XWing,
+        DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, MlKem1024,
+        MlKem1024P384, MlKem768, MlKem768P256, SharedSecret, X25519HkdfSha256, XWing,
     },
     op_mode::{OpModeR, PskBundle},
     setup::setup_receiver,
@@ -374,7 +373,7 @@ fn classical_pq_and_hybrid() {
         let file = File::open("test-vectors/pq-53273fb.json").unwrap();
         serde_json::from_reader(file).unwrap()
     };
-    
+
     // Note: pure ML-KEM (kem 0x0041/0x0042) + SHAKE256 (kdf 0x0011) has no published vector.
     // The hpke-pq vectors only pin pure ML-KEM under HKDF (A.2/A.3) and TurboSHAKE256 (A.13); the
     // only SHAKE256 vector is X-Wing. (A.7 and A.11 are titled "SHAKE256" in draft-04 but their
@@ -501,8 +500,7 @@ fn hybrid() {
             tv.decapsulation_key_pq.as_slice()
         );
 
-        let ek =
-            <MlKem1024P384 as KemTrait>::PublicKey::from_bytes(&tv.encapsulation_key).unwrap();
+        let ek = <MlKem1024P384 as KemTrait>::PublicKey::from_bytes(&tv.encapsulation_key).unwrap();
         assert_eq!(MlKem1024P384::sk_to_pk(&dk), ek);
 
         let (ss, ct) = MlKem1024P384::encap_det(&ek, None, &tv.randomness).unwrap();

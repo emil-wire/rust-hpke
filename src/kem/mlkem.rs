@@ -1,6 +1,10 @@
 //! The pure ML-KEM-768 and ML-KEM-1024 HPKE KEMs, as currently specified in
 //! <https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-04> §3.
 //!
+//! **EXPERIMENTAL:** these KEMs are based on `draft-ietf-hpke-pq-04`, an unratified IETF draft.
+//! The construction and its identifiers are subject to change until the draft is finalized, so the
+//! wire format is not yet stable. Treat these KEMs as experimental.
+//!
 //! Unlike the hybrid KEMs in this crate, these use the ML-KEM shared secret directly as the HPKE
 //! shared secret (no ExtractAndExpand/KDF wrapping). The private key is the 64-byte ML-KEM seed
 //! `d‖z`, NOT the FIPS-203 expanded decapsulation key.
@@ -299,6 +303,7 @@ macro_rules! define_mlkem {
     };
 }
 
+#[cfg(feature = "mlkem768")]
 define_mlkem!(
     /// Represents the pure ML-KEM-768 post-quantum KEM.
     MlKem768,
@@ -310,6 +315,7 @@ define_mlkem!(
     "ML-KEM-768"
 );
 
+#[cfg(feature = "mlkem1024")]
 define_mlkem!(
     /// Represents the pure ML-KEM-1024 post-quantum KEM.
     MlKem1024,
@@ -323,7 +329,10 @@ define_mlkem!(
 
 #[cfg(test)]
 mod tests {
-    use super::{MlKem1024, MlKem768};
+    #[cfg(feature = "mlkem1024")]
+    use super::MlKem1024;
+    #[cfg(feature = "mlkem768")]
+    use super::MlKem768;
     use crate::{Deserializable, Kem as KemTrait, Serializable};
 
     macro_rules! test_encap_correctness {
@@ -337,7 +346,8 @@ mod tests {
                 let (sk_recip, pk_recip) = Kem::gen_keypair_with_rng(&mut csprng);
 
                 let (shared_secret, encapped_key) =
-                    Kem::encap_with_rng(&pk_recip, None, &mut csprng).expect("encapsulation failed");
+                    Kem::encap_with_rng(&pk_recip, None, &mut csprng)
+                        .expect("encapsulation failed");
                 let decapped_shared_secret =
                     Kem::decap(&sk_recip, None, &encapped_key).expect("decapsulation failed");
 
@@ -355,8 +365,7 @@ mod tests {
 
                 let mut csprng = rand::rng();
                 let (_, pk_recip) = Kem::gen_keypair_with_rng(&mut csprng);
-                let encapped_key =
-                    Kem::encap_with_rng(&pk_recip, None, &mut csprng).unwrap().1;
+                let encapped_key = Kem::encap_with_rng(&pk_recip, None, &mut csprng).unwrap().1;
 
                 let encapped_key_bytes = encapped_key.to_bytes();
                 let new_encapped_key =
@@ -374,20 +383,30 @@ mod tests {
         };
     }
 
+    #[cfg(feature = "mlkem768")]
     test_encap_correctness!(test_encap_correctness_mlkem768, MlKem768);
+    #[cfg(feature = "mlkem1024")]
     test_encap_correctness!(test_encap_correctness_mlkem1024, MlKem1024);
+    #[cfg(feature = "mlkem768")]
     test_encapped_serialize!(test_encapped_serialize_mlkem768, MlKem768);
+    #[cfg(feature = "mlkem1024")]
     test_encapped_serialize!(test_encapped_serialize_mlkem1024, MlKem1024);
 
     /// Tests that the wire sizes match the constants in draft-ietf-hpke-pq-04 §3
+    #[cfg(feature = "mlkem768")]
     #[test]
-    fn sizes_match_spec() {
+    fn sizes_match_spec_mlkem768() {
         // ML-KEM-768: KEM_ID=0x0041, Nsecret=32, Nenc=1088, Npk=1184, Nsk=64
         assert_eq!(MlKem768::KEM_ID, 0x0041);
         assert_eq!(<MlKem768 as KemTrait>::PrivateKey::size(), 64);
         assert_eq!(<MlKem768 as KemTrait>::PublicKey::size(), 1184);
         assert_eq!(<MlKem768 as KemTrait>::EncappedKey::size(), 1088);
+    }
 
+    /// Tests that the wire sizes match the constants in draft-ietf-hpke-pq-04 §3
+    #[cfg(feature = "mlkem1024")]
+    #[test]
+    fn sizes_match_spec_mlkem1024() {
         // ML-KEM-1024: KEM_ID=0x0042, Nsecret=32, Nenc=1568, Npk=1568, Nsk=64
         assert_eq!(MlKem1024::KEM_ID, 0x0042);
         assert_eq!(<MlKem1024 as KemTrait>::PrivateKey::size(), 64);
@@ -396,6 +415,7 @@ mod tests {
     }
 
     /// Tests that DeriveKeyPair is deterministic and that derived keypairs round-trip
+    #[cfg(feature = "mlkem768")]
     #[test]
     fn derive_keypair_roundtrip() {
         let ikm = [7u8; 64];
