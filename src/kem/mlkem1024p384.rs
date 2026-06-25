@@ -2,7 +2,7 @@
 //! which itself derives from <https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-04>
 //!
 //! **EXPERIMENTAL:** this KEM is based on `draft-ietf-hpke-pq-04`,
-//! `draft-irtf-cfrg-concrete-hybrid-kems-03`, and `draft-irtf-cfrg-hybrid-kems-11` — all unratified
+//! `draft-irtf-cfrg-concrete-hybrid-kems-03`, and `draft-irtf-cfrg-hybrid-kems-11` - all unratified
 //! IETF drafts. The construction and its identifiers are subject to change until the drafts are
 //! finalized, so the wire format is not yet stable. Treat this KEM as experimental.
 
@@ -357,7 +357,9 @@ fn expand_key(
     xof.read(&mut seed_pq);
     xof.read(&mut seed_t);
 
-    let (dk_pq, ek_pq) = MlKem1024::from_seed(&seed_pq.into());
+    let mut seed_pq_arr = seed_pq.into();
+    let (dk_pq, ek_pq) = MlKem1024::from_seed(&seed_pq_arr);
+    seed_pq_arr[..].zeroize();
     let dk_t = p384_random_scalar(&seed_t);
     let ek_t = dk_t.public_key();
 

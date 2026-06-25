@@ -28,11 +28,11 @@ use subtle::{Choice, ConstantTimeEq};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Parameters:
-/// - `$kem` — the name of the KEM struct to define (e.g. `MlKem768`)
-/// - `$param` — the `ml_kem` parameter set type (e.g. `MlKem768Params`)
-/// - `$pk`, `$sk`, `$enc` — names for the public-key, private-key, and encapsulated-key structs
-/// - `kem_id = $kem_id` — the HPKE KEM identifier from draft-ietf-hpke-pq-04 §3
-/// - `$name` — a string literal used in assertion messages (e.g. `"ML-KEM-768"`)
+/// - `$kem` - the name of the KEM struct to define (e.g. `MlKem768`)
+/// - `$param` - the `ml_kem` parameter set type (e.g. `MlKem768Params`)
+/// - `$pk`, `$sk`, `$enc` - names for the public-key, private-key, and encapsulated-key structs
+/// - `kem_id = $kem_id` - the HPKE KEM identifier from draft-ietf-hpke-pq-04 §3
+/// - `$name` - a string literal used in assertion messages (e.g. `"ML-KEM-768"`)
 ///
 /// Wire sizes (`Nenc`, `Npk`, `Nsk`) are derived automatically from the `ml_kem` type-level
 /// constants (`CiphertextSize`, `KeySize`, etc.) rather than being supplied as macro arguments.
@@ -163,7 +163,9 @@ macro_rules! define_mlkem {
 
             fn sk_to_pk(sk: &Self::PrivateKey) -> Self::PublicKey {
                 // expandDecapsKey(dk): (ek, expanded_dk) = ML-KEM.KeyGen_internal(d, z)
-                let (_, ek) = <$param as FromSeed>::from_seed(&sk.seed.into());
+                let mut seed_arr = sk.seed.into();
+                let (_, ek) = <$param as FromSeed>::from_seed(&seed_arr);
+                seed_arr[..].zeroize();
                 $pk(ek)
             }
 
@@ -183,7 +185,9 @@ macro_rules! define_mlkem {
                     &mut seed,
                 );
 
-                let (_, ek) = <$param as FromSeed>::from_seed(&seed.into());
+                let mut seed_arr = seed.into();
+                let (_, ek) = <$param as FromSeed>::from_seed(&seed_arr);
+                seed_arr[..].zeroize();
                 ($sk { seed }, $pk(ek))
             }
 
@@ -209,7 +213,9 @@ macro_rules! define_mlkem {
                     )
                 );
 
-                let (dk, _) = <$param as FromSeed>::from_seed(&sk_recip.seed.into());
+                let mut seed_arr = sk_recip.seed.into();
+                let (dk, _) = <$param as FromSeed>::from_seed(&seed_arr);
+                seed_arr[..].zeroize();
                 let ss = DecapsulationKey::<$param>::decapsulate(&dk, &encapped_key.0);
                 Ok(SharedSecret(ss))
             }

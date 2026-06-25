@@ -40,7 +40,7 @@ alloc = []
 # Enable RNG-less top-level functions
 getrandom = ["dep:getrandom"]
 # Used to enable known-answer tests. Implies alloc and all other features
-kat = ["alloc", "x25519", "p256", "p384", "p521", "xwing", "mlkem768p256", "mlkem1024p384", "mlkem768", "mlkem1024"]
+kat = ["alloc", "getrandom", "aes", "chacha", "x25519", "p256", "p384", "p521", "xwing", "mlkem768p256", "mlkem1024p384", "mlkem768", "mlkem1024"]
 hazmat-streaming-enc = []
 
 [dependencies]
