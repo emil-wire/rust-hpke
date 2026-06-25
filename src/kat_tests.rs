@@ -379,9 +379,7 @@ fn classical_pq_and_hybrid() {
     // only SHAKE256 vector is X-Wing. (A.7 and A.11 are titled "SHAKE256" in draft-04 but their
     // bodies use SHAKE128 / kdf 0x0010 - checked against the vector files.)
     //
-    // I decided to pin the two halves separately rather than invent a vector: X-Wing covers the SHAKE256
-    // KDF, the HKDF vectors below cover ML-KEM encap/decap (plus the direct decap check in
-    // `test_case`). The exact composition is left to the round-trip tests elsewhere.
+    // I decided to pin the two halves separately rather than invent a vector
     for tv in ref_tvs.into_iter().chain(pq_tvs.into_iter()) {
         // Ignore everything that doesn't use X25519, P256, P384, P521, XWing,
         // MLKEM768-P256, MLKEM1024-P384, or MLKEM768/1024 since that's all we support right now
