@@ -17,14 +17,14 @@ use crate::{
 };
 
 use hybrid_array::typenum::{Unsigned, U32, U64};
-use ml_kem::{
-    kem::{Decapsulate, Encapsulate, Kem as KemCore},
-    Ciphertext, DecapsulationKey, EncapsulationKey, FromSeed, KeyExport, KeySizeUser,
-};
 #[cfg(feature = "mlkem1024")]
 use ml_kem::MlKem1024 as MlKem1024Params;
 #[cfg(feature = "mlkem768")]
 use ml_kem::MlKem768 as MlKem768Params;
+use ml_kem::{
+    kem::{Decapsulate, Encapsulate, Kem as KemCore},
+    Ciphertext, DecapsulationKey, EncapsulationKey, FromSeed, KeyExport, KeySizeUser,
+};
 use rand_core::CryptoRng;
 use sha3::Shake256;
 use subtle::{Choice, ConstantTimeEq};
