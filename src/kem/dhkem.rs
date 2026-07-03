@@ -1,3 +1,5 @@
+//! X25519 and NIST-P DHKEMs
+
 /// Defines DHKEM(G, K) given a Diffie-Hellman group G and KDF K
 macro_rules! impl_dhkem {
     (

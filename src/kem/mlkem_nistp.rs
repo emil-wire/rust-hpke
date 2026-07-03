@@ -1,4 +1,4 @@
-//! ML-KEM + NIST-P hybrid PQ KEMs.
+//! ML-KEM + NIST-P hybrid PQ KEMs
 //!
 //! Contains implementations of MLKEM768-P256 and MLKEM1024-P384, implemented as per
 //! <https://filippo.io/hpke-pq>, which itself derives from

@@ -1,13 +1,7 @@
-//! The pure ML-KEM-768 and ML-KEM-1024 HPKE KEMs, as currently specified in
+//! Pure ML-KEM-768 and ML-KEM-1024 KEMs
+//!
+//! Implemented as per
 //! <https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-04> §3.
-//!
-//! **EXPERIMENTAL:** these KEMs are based on `draft-ietf-hpke-pq-04`, an unratified IETF draft.
-//! The construction and its identifiers are subject to change until the draft is finalized, so the
-//! wire format is not yet stable. Treat these KEMs as experimental.
-//!
-//! Unlike the hybrid KEMs in this crate, these use the ML-KEM shared secret directly as the HPKE
-//! shared secret (no ExtractAndExpand/KDF wrapping). The private key is the 64-byte ML-KEM seed
-//! `d‖z`, NOT the FIPS-203 expanded decapsulation key.
 
 use crate::{
     kdf::one_stage_kdf::labeled_derive,
@@ -50,22 +44,19 @@ macro_rules! define_mlkem {
         kem_id = $kem_id:expr,
         $name:literal
     ) => {
-        /// An ML-KEM private key. This is the 64-byte seed `d‖z`, per draft-ietf-hpke-pq-04 §3.
+        /// An ML-KEM private key
         #[derive(Clone)]
-        pub struct $sk {
-            seed: [u8; 64],
-        }
+        pub struct $sk(DecapsulationKey<$param>);
 
-        impl Drop for $sk {
-            fn drop(&mut self) {
-                self.seed.zeroize();
-            }
-        }
+        // DecapsulationKey handles zeroize-on-drop internally
         impl ZeroizeOnDrop for $sk {}
 
         impl ConstantTimeEq for $sk {
             fn ct_eq(&self, other: &Self) -> Choice {
-                self.seed.ct_eq(&other.seed)
+                // We can unwrap because every $sk is initialized with `from_seed`
+                let self_seed: [u8; 64] = self.0.to_seed().unwrap().into();
+                let other_seed: [u8; 64] = other.0.to_seed().unwrap().into();
+                self_seed.ct_eq(&other_seed)
             }
         }
 
@@ -83,17 +74,21 @@ macro_rules! define_mlkem {
             fn write_exact(&self, buf: &mut [u8]) {
                 // Check the length is correct and panic if not
                 enforce_outbuf_len::<Self>(buf);
-                // The serialized private key is the seed itself (identity)
-                buf.copy_from_slice(&self.seed);
+                // We can unwrap because every $sk is initialized with `from_seed`
+                buf.copy_from_slice(&self.0.to_seed().unwrap());
             }
         }
 
         impl Deserializable for $sk {
             fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
-                let seed = encoded.try_into().map_err(|_| {
+                let mut seed: [u8; 64] = encoded.try_into().map_err(|_| {
                     HpkeError::IncorrectInputLength(Self::OutputSize::to_usize(), encoded.len())
                 })?;
-                Ok(Self { seed })
+                let mut seed_arr = seed.into();
+                let (dk, _) = <$param as FromSeed>::from_seed(&seed_arr);
+                seed_arr[..].zeroize();
+                seed.zeroize();
+                Ok(Self(dk))
             }
         }
 
@@ -165,11 +160,7 @@ macro_rules! define_mlkem {
             type EncappedKey = $enc;
 
             fn sk_to_pk(sk: &Self::PrivateKey) -> Self::PublicKey {
-                // expandDecapsKey(dk): (ek, expanded_dk) = ML-KEM.KeyGen_internal(d, z)
-                let mut seed_arr = sk.seed.into();
-                let (_, ek) = <$param as FromSeed>::from_seed(&seed_arr);
-                seed_arr[..].zeroize();
-                $pk(ek)
+                $pk(sk.0.encapsulation_key().clone())
             }
 
             // From draft-ietf-hpke-pq-04 §3:
@@ -189,9 +180,11 @@ macro_rules! define_mlkem {
                 );
 
                 let mut seed_arr = seed.into();
-                let (_, ek) = <$param as FromSeed>::from_seed(&seed_arr);
+                let (dk, ek) = <$param as FromSeed>::from_seed(&seed_arr);
                 seed_arr[..].zeroize();
-                ($sk { seed }, $pk(ek))
+                seed.zeroize();
+
+                ($sk(dk), $pk(ek))
             }
 
             /// Decapsulate the encapsulated key using the recipient's private key. This DOES NOT
@@ -216,10 +209,7 @@ macro_rules! define_mlkem {
                     )
                 );
 
-                let mut seed_arr = sk_recip.seed.into();
-                let (dk, _) = <$param as FromSeed>::from_seed(&seed_arr);
-                seed_arr[..].zeroize();
-                let ss = DecapsulationKey::<$param>::decapsulate(&dk, &encapped_key.0);
+                let ss = sk_recip.0.decapsulate(&encapped_key.0);
                 Ok(SharedSecret(ss))
             }
 
