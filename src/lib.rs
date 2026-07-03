@@ -107,6 +107,12 @@ pub use rand_core;
 mod util;
 
 pub mod aead;
+#[cfg(any(
+    feature = "x25519",
+    feature = "p256",
+    feature = "p384",
+    feature = "p521"
+))]
 mod dhkex;
 pub mod kdf;
 pub mod kem;

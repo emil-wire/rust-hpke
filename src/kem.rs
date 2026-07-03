@@ -13,7 +13,19 @@ use rand_core::UnwrapErr;
 use subtle::ConstantTimeEq;
 use zeroize::Zeroize;
 
+#[cfg(any(
+    feature = "x25519",
+    feature = "p256",
+    feature = "p384",
+    feature = "p521"
+))]
 mod dhkem;
+#[cfg(any(
+    feature = "x25519",
+    feature = "p256",
+    feature = "p384",
+    feature = "p521"
+))]
 pub use dhkem::*;
 #[cfg(any(feature = "mlkem768p256", feature = "mlkem1024p384"))]
 mod mlkem_nistp;
