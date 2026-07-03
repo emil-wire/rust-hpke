@@ -15,14 +15,12 @@ use zeroize::Zeroize;
 
 mod dhkem;
 pub use dhkem::*;
-#[cfg(feature = "mlkem768p256")]
-pub mod mlkem768p256;
-#[cfg(feature = "mlkem768p256")]
-pub use mlkem768p256::MlKem768P256;
+#[cfg(any(feature = "mlkem768p256", feature = "mlkem1024p384"))]
+mod mlkem_nistp;
 #[cfg(feature = "mlkem1024p384")]
-pub mod mlkem1024p384;
-#[cfg(feature = "mlkem1024p384")]
-pub use mlkem1024p384::MlKem1024P384;
+pub use mlkem_nistp::mlkem1024p384::MlKem1024P384;
+#[cfg(feature = "mlkem768p256")]
+pub use mlkem_nistp::mlkem768p256::MlKem768P256;
 #[cfg(any(feature = "mlkem768", feature = "mlkem1024"))]
 pub mod mlkem;
 #[cfg(feature = "mlkem1024")]

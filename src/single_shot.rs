@@ -372,7 +372,7 @@ mod test {
         test_single_shot_correctness_mlkem1024p384,
         ChaCha20Poly1305,
         crate::kdf::HkdfSha256,
-        crate::kem::mlkem1024p384::MlKem1024P384,
+        crate::kem::MlKem1024P384,
         false
     );
 }
