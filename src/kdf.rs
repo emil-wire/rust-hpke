@@ -88,8 +88,9 @@ pub trait Kdf: Sized {
     ) -> Result<(), HpkeError>;
 }
 
-// We use Kdf as a type parameter, so this is to avoid ambiguity.
 use sha3::{Shake128, Shake256};
+use turboshake::{TurboShake128, TurboShake256};
+// We use Kdf as a type parameter, so this is to avoid ambiguity.
 use Kdf as KdfTrait;
 
 // Convenience types for the functions below
@@ -360,5 +361,115 @@ impl KdfTrait for KdfShake256 {
         out_buf: &mut [u8],
     ) -> Result<(), HpkeError> {
         one_stage_kdf::export::<Shake256>(exporter_secret, suite_id, exporter_ctx, out_buf)
+    }
+}
+
+/// The implementation of SHAKE128 KDF
+pub struct KdfTurboShake128 {}
+
+impl KdfTrait for KdfTurboShake128 {
+    // https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-03#section-5
+    const KDF_ID: u16 = 0x0012;
+    type Nh = U32;
+
+    fn combine_secrets<A, Kem, O>(
+        mode: &O,
+        shared_secret: SharedSecret<Kem>,
+        info: &[u8],
+    ) -> AeadCtx<A, Self, Kem>
+    where
+        A: Aead,
+        Kem: KemTrait,
+        O: OpMode<Kem>,
+    {
+        one_stage_kdf::combine_secrets::<_, TurboShake128, _, _, _>(mode, shared_secret, info)
+    }
+
+    fn extract_and_expand(
+        ikm: &[u8],
+        suite_id: &[u8],
+        info: &[u8],
+        out: &mut [u8],
+    ) -> Result<(), hkdf::InvalidLength> {
+        one_stage_kdf::extract_and_expand::<TurboShake128>(ikm, suite_id, info, out);
+        Ok(())
+    }
+
+    fn derive_x25519_sk_eph_bytes(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32] {
+        one_stage_kdf::derive_x25519_sk_eph_bytes::<TurboShake128>(suite_id, ikm)
+    }
+
+    fn derive_nistp_sk_eph_bytes<PrivateKeySize: ArraySize>(
+        suite_id: &KemSuiteId,
+        ikm: &[u8],
+        counter: u8,
+    ) -> Array<u8, PrivateKeySize> {
+        one_stage_kdf::derive_nistp_sk_eph_bytes::<TurboShake128, PrivateKeySize>(
+            suite_id, ikm, counter,
+        )
+    }
+
+    fn export(
+        exporter_secret: &[u8],
+        suite_id: &[u8],
+        exporter_ctx: &[u8],
+        out_buf: &mut [u8],
+    ) -> Result<(), HpkeError> {
+        one_stage_kdf::export::<TurboShake128>(exporter_secret, suite_id, exporter_ctx, out_buf)
+    }
+}
+
+/// The implementation of TurboSHAKE256 KDF
+pub struct KdfTurboShake256 {}
+
+impl KdfTrait for KdfTurboShake256 {
+    // https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-03#section-5
+    const KDF_ID: u16 = 0x0013;
+    type Nh = U64;
+
+    fn combine_secrets<A, Kem, O>(
+        mode: &O,
+        shared_secret: SharedSecret<Kem>,
+        info: &[u8],
+    ) -> AeadCtx<A, Self, Kem>
+    where
+        A: Aead,
+        Kem: KemTrait,
+        O: OpMode<Kem>,
+    {
+        one_stage_kdf::combine_secrets::<_, TurboShake256, _, _, _>(mode, shared_secret, info)
+    }
+
+    fn extract_and_expand(
+        ikm: &[u8],
+        suite_id: &[u8],
+        info: &[u8],
+        out: &mut [u8],
+    ) -> Result<(), hkdf::InvalidLength> {
+        one_stage_kdf::extract_and_expand::<TurboShake256>(ikm, suite_id, info, out);
+        Ok(())
+    }
+
+    fn derive_x25519_sk_eph_bytes(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32] {
+        one_stage_kdf::derive_x25519_sk_eph_bytes::<TurboShake256>(suite_id, ikm)
+    }
+
+    fn derive_nistp_sk_eph_bytes<PrivateKeySize: ArraySize>(
+        suite_id: &KemSuiteId,
+        ikm: &[u8],
+        counter: u8,
+    ) -> Array<u8, PrivateKeySize> {
+        one_stage_kdf::derive_nistp_sk_eph_bytes::<TurboShake256, PrivateKeySize>(
+            suite_id, ikm, counter,
+        )
+    }
+
+    fn export(
+        exporter_secret: &[u8],
+        suite_id: &[u8],
+        exporter_ctx: &[u8],
+        out_buf: &mut [u8],
+    ) -> Result<(), HpkeError> {
+        one_stage_kdf::export::<TurboShake256>(exporter_secret, suite_id, exporter_ctx, out_buf)
     }
 }

@@ -1,6 +1,9 @@
 use crate::{
     aead::{Aead, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead},
-    kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait, KdfShake128, KdfShake256},
+    kdf::{
+        HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait, KdfShake128, KdfShake256,
+        KdfTurboShake128, KdfTurboShake256,
+    },
     kem::{
         DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, MlKem1024,
         MlKem1024P384, MlKem768, MlKem768P256, SharedSecret, X25519HkdfSha256, XWing,
@@ -374,12 +377,6 @@ fn classical_pq_and_hybrid() {
         serde_json::from_reader(file).unwrap()
     };
 
-    // Note: pure ML-KEM (kem 0x0041/0x0042) + SHAKE256 (kdf 0x0011) has no published vector.
-    // The hpke-pq vectors only pin pure ML-KEM under HKDF (A.2/A.3) and TurboSHAKE256 (A.13); the
-    // only SHAKE256 vector is X-Wing. (A.7 and A.11 are titled "SHAKE256" in draft-04 but their
-    // bodies use SHAKE128 / kdf 0x0010 - checked against the vector files.)
-    //
-    // I decided to pin the two halves separately rather than invent a vector
     for tv in ref_tvs.into_iter().chain(pq_tvs.into_iter()) {
         // Ignore everything that doesn't use X25519, P256, P384, P521, XWing,
         // MLKEM768-P256, MLKEM1024-P384, or MLKEM768/1024 since that's all we support right now
@@ -400,7 +397,15 @@ fn classical_pq_and_hybrid() {
         dispatch_testcase!(
             tv,
             (AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead),
-            (HkdfSha256, HkdfSha384, HkdfSha512, KdfShake128, KdfShake256),
+            (
+                HkdfSha256,
+                HkdfSha384,
+                HkdfSha512,
+                KdfShake128,
+                KdfShake256,
+                KdfTurboShake128,
+                KdfTurboShake256
+            ),
             (
                 X25519HkdfSha256,
                 DhP256HkdfSha256,
@@ -417,7 +422,7 @@ fn classical_pq_and_hybrid() {
         // The above macro has a `continue` in every branch. We only get to this line if it failed
         // to match every combination of the above primitives.
         panic!(
-            "Unrecognized (AEAD ID, KDF ID, KEM ID) combo: ({}, {}, {})",
+            "Unrecognized (AEAD ID, KDF ID, KEM ID) combo: ({:x}, {:x}, {:x})",
             tv.aead_id, tv.kdf_id, tv.kem_id
         );
     }
