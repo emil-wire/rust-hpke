@@ -18,8 +18,9 @@ const MSG_LEN: usize = 64;
 // Length of PSK. Since we're only testing the 128-bit security level, make it 128 bits
 const PSK_LEN: usize = 16;
 
-// Generic function to bench the specified ciphersuite
-fn bench_ciphersuite<Aead, Kdf, Kem>(group_name: &str, c: &mut Criterion)
+// Generic function to bench the specified ciphersuite. If `supports_auth` is false, only Base and
+// Psk operation modes are benchmarked (PQ KEMs don't support Auth/AuthPsk).
+fn bench_ciphersuite<Aead, Kdf, Kem>(group_name: &str, c: &mut Criterion, supports_auth: bool)
 where
     Aead: AeadTrait,
     Kdf: KdfTrait,
@@ -41,20 +42,18 @@ where
     // Make a sender keypair for OpModeAuth and OpModeAuthPsk
     let (sk_sender, pk_sender) = Kem::gen_keypair();
 
-    // Construct all the opmodes we'll use in setup_sender and setup_receiver
-    let opmodes = ["base", "auth", "psk", "authpsk"];
-    let opmodes_s = vec![
-        OpModeS::Base,
-        OpModeS::Auth((sk_sender.clone(), pk_sender.clone())),
-        OpModeS::Psk(psk_bundle),
-        OpModeS::AuthPsk((sk_sender, pk_sender.clone()), psk_bundle),
-    ];
-    let opmodes_r = vec![
-        OpModeR::Base,
-        OpModeR::Psk(psk_bundle),
-        OpModeR::Auth(pk_recip.clone()),
-        OpModeR::AuthPsk(pk_recip.clone(), psk_bundle),
-    ];
+    // Construct the opmodes we'll use in setup_sender and setup_receiver.
+    // PQ KEMs only support Base and Psk.
+    let mut opmodes: Vec<&str> = vec!["base", "psk"];
+    let mut opmodes_s: Vec<OpModeS<Kem>> = vec![OpModeS::Base, OpModeS::Psk(psk_bundle)];
+    let mut opmodes_r: Vec<OpModeR<Kem>> = vec![OpModeR::Base, OpModeR::Psk(psk_bundle)];
+    if supports_auth {
+        opmodes.extend_from_slice(&["auth", "authpsk"]);
+        opmodes_s.push(OpModeS::Auth((sk_sender.clone(), pk_sender.clone())));
+        opmodes_s.push(OpModeS::AuthPsk((sk_sender, pk_sender.clone()), psk_bundle));
+        opmodes_r.push(OpModeR::Auth(pk_recip.clone()));
+        opmodes_r.push(OpModeR::AuthPsk(pk_recip.clone(), psk_bundle));
+    }
 
     // Bench setup_sender() for each opmode
     for (mode, opmode_s) in opmodes.iter().zip(opmodes_s.iter()) {
@@ -186,8 +185,9 @@ pub fn benches() {
     // NIST ciphersuite at the 128-bit security level is AES-GCM-128, HKDF-SHA256, and ECDH-P256
     #[cfg(all(feature = "p256", feature = "aes"))]
     bench_ciphersuite::<hpke::aead::AesGcm128, hpke::kdf::HkdfSha256, hpke::kem::DhP256HkdfSha256>(
-        "NIST[seclevel=128]",
+        "Classical-NIST[seclevel=128]",
         &mut c,
+        true,
     );
 
     // Non-NIST ciphersuite at the 128-bit security level is ChaCha20Poly1305, HKDF-SHA256, and X25519
@@ -196,7 +196,47 @@ pub fn benches() {
         hpke::aead::ChaCha20Poly1305,
         hpke::kdf::HkdfSha256,
         hpke::kem::X25519HkdfSha256,
-    >("Non-NIST[seclevel=128]", &mut c);
+    >("Classical-NonNIST[seclevel=128]", &mut c, true);
+
+    // Pure ML-KEM-768 at the 128-bit security level
+    #[cfg(all(feature = "mlkem768", feature = "aes"))]
+    bench_ciphersuite::<hpke::aead::AesGcm128, hpke::kdf::KdfShake128, hpke::kem::MlKem768>(
+        "MLKEM768-NIST[seclevel=128]",
+        &mut c,
+        false,
+    );
+
+    // Pure ML-KEM-1024 at the 256-bit security level
+    #[cfg(all(feature = "mlkem1024", feature = "aes"))]
+    bench_ciphersuite::<hpke::aead::AesGcm256, hpke::kdf::KdfShake256, hpke::kem::MlKem1024>(
+        "MLKEM1024-NIST[seclevel=256]",
+        &mut c,
+        false,
+    );
+
+    // Hybrid ML-KEM-768 + NIST-P256 at the 128-bit security level
+    #[cfg(all(feature = "mlkem768p256", feature = "aes"))]
+    bench_ciphersuite::<hpke::aead::AesGcm128, hpke::kdf::KdfShake128, hpke::kem::MlKem768P256>(
+        "MLKEM768P256-NIST[seclevel=128]",
+        &mut c,
+        false,
+    );
+
+    // Hybrid ML-KEM-1024 + NIST-P384 at the 256-bit security level
+    #[cfg(all(feature = "mlkem1024p384", feature = "aes"))]
+    bench_ciphersuite::<hpke::aead::AesGcm256, hpke::kdf::KdfShake256, hpke::kem::MlKem1024P384>(
+        "MLKEM1024P384-NIST[seclevel=256]",
+        &mut c,
+        false,
+    );
+
+    // X-Wing hybrid PQ KEM with ChaCha20Poly1305 and SHAKE256
+    #[cfg(all(feature = "xwing", feature = "chacha"))]
+    bench_ciphersuite::<hpke::aead::ChaCha20Poly1305, hpke::kdf::KdfTurboShake128, hpke::kem::XWing>(
+        "XWing-NonNIST[seclevel=128]",
+        &mut c,
+        false,
+    );
 }
 
 criterion_main!(benches);
