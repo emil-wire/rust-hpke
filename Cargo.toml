@@ -23,7 +23,7 @@ rust-version = "1.85"
 # "mlkem1024p384" enables the use of MLKEM1024-P384 hybrid post-quantum KEM
 # "mlkem768" enables the use of the pure ML-KEM-768 post-quantum KEM
 # "mlkem1024" enables the use of the pure ML-KEM-1024 post-quantum KEM
-default = ["getrandom", "alloc", "p256", "x25519", "aes", "chacha", "kat"]
+default = ["getrandom", "alloc", "p256", "x25519", "aes", "chacha"]
 x25519 = ["dep:x25519-dalek"]
 p256 = ["dep:p256"]
 p384 = ["dep:p384"]

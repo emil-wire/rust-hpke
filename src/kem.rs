@@ -36,9 +36,9 @@ pub use mlkem_nistp::mlkem768p256::MlKem768P256;
 #[cfg(any(feature = "mlkem768", feature = "mlkem1024"))]
 pub mod mlkem;
 #[cfg(feature = "mlkem1024")]
-pub use mlkem::MlKem1024;
+pub use mlkem::mlkem1024::MlKem1024;
 #[cfg(feature = "mlkem768")]
-pub use mlkem::MlKem768;
+pub use mlkem::mlkem768::MlKem768;
 #[cfg(feature = "xwing")]
 pub mod xwing;
 #[cfg(feature = "xwing")]

@@ -3,32 +3,11 @@
 //! Implemented as per
 //! <https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-04> §3.
 
-use crate::{
-    kdf::one_stage_kdf::labeled_derive,
-    kem::{KemTrait, SharedSecret},
-    util::{enforce_equal_len, enforce_outbuf_len, kem_suite_id},
-    Deserializable, HpkeError, Serializable,
-};
-
-use hybrid_array::typenum::{Unsigned, U32, U64};
-#[cfg(feature = "mlkem1024")]
-use ml_kem::MlKem1024 as MlKem1024Params;
-#[cfg(feature = "mlkem768")]
-use ml_kem::MlKem768 as MlKem768Params;
-use ml_kem::{
-    kem::{Decapsulate, Encapsulate, Kem as KemCore},
-    Ciphertext, DecapsulationKey, EncapsulationKey, FromSeed, KeyExport, KeySizeUser,
-};
-use rand_core::CryptoRng;
-use sha3::Shake256;
-use subtle::{Choice, ConstantTimeEq};
-use zeroize::{Zeroize, ZeroizeOnDrop};
-
 /// Parameters:
+/// - `$mod_name` - the name of the module we will put this KEM implementation in
 /// - `$kem` - the name of the KEM struct to define (e.g. `MlKem768`)
 /// - `$param` - the `ml_kem` parameter set type (e.g. `MlKem768Params`)
-/// - `$pk`, `$sk`, `$enc` - names for the public-key, private-key, and encapsulated-key structs
-/// - `kem_id = $kem_id` - the HPKE KEM identifier from draft-ietf-hpke-pq-04 §3
+/// - `$kem_id` - the HPKE KEM identifier from draft-ietf-hpke-pq-04 §3
 /// - `$name` - a string literal used in assertion messages (e.g. `"ML-KEM-768"`)
 ///
 /// Wire sizes (`Nenc`, `Npk`, `Nsk`) are derived automatically from the `ml_kem` type-level
@@ -36,267 +15,284 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 macro_rules! define_mlkem {
     (
         $(#[$kem_doc:meta])*
+        $mod_name:ident,
         $kem:ident,
         $param:ty,
-        $pk:ident,
-        $sk:ident,
-        $enc:ident,
-        kem_id = $kem_id:expr,
-        $name:literal
+        $kem_id:expr,
     ) => {
-        /// An ML-KEM private key
-        #[derive(Clone)]
-        pub struct $sk(DecapsulationKey<$param>);
+        pub mod $mod_name {
+            use crate::{
+                kdf::one_stage_kdf::labeled_derive,
+                kem::{KemTrait, SharedSecret},
+                util::{enforce_equal_len, enforce_outbuf_len, kem_suite_id},
+                Deserializable, HpkeError, Serializable,
+            };
 
-        // DecapsulationKey handles zeroize-on-drop internally
-        impl ZeroizeOnDrop for $sk {}
+            use hybrid_array::typenum::{Unsigned, U32, U64};
+            use ml_kem::{
+                kem::{Decapsulate, Encapsulate, Kem as KemCore},
+                Ciphertext, DecapsulationKey, EncapsulationKey, FromSeed, KeyExport, KeySizeUser,
+            };
+            use rand_core::CryptoRng;
+            use sha3::Shake256;
+            use subtle::{Choice, ConstantTimeEq};
+            use zeroize::{Zeroize, ZeroizeOnDrop};
 
-        impl ConstantTimeEq for $sk {
-            fn ct_eq(&self, other: &Self) -> Choice {
-                // We can unwrap because every $sk is initialized with `from_seed`
-                let self_seed: [u8; 64] = self.0.to_seed().unwrap().into();
-                let other_seed: [u8; 64] = other.0.to_seed().unwrap().into();
-                self_seed.ct_eq(&other_seed)
-            }
-        }
 
-        impl PartialEq for $sk {
-            fn eq(&self, other: &Self) -> bool {
-                self.ct_eq(other).into()
-            }
-        }
-        impl Eq for $sk {}
+            /// An ML-KEM private key
+            #[derive(Clone)]
+            pub struct PrivateKey(DecapsulationKey<$param>);
 
-        impl Serializable for $sk {
-            // Nsk = 64 per draft-ietf-hpke-pq-04 §3
-            type OutputSize = U64;
+            // DecapsulationKey handles zeroize-on-drop internally
+            impl ZeroizeOnDrop for PrivateKey {}
 
-            fn write_exact(&self, buf: &mut [u8]) {
-                // Check the length is correct and panic if not
-                enforce_outbuf_len::<Self>(buf);
-                // We can unwrap because every $sk is initialized with `from_seed`
-                buf.copy_from_slice(&self.0.to_seed().unwrap());
-            }
-        }
-
-        impl Deserializable for $sk {
-            fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
-                let mut seed: [u8; 64] = encoded.try_into().map_err(|_| {
-                    HpkeError::IncorrectInputLength(Self::OutputSize::to_usize(), encoded.len())
-                })?;
-                let mut seed_arr = seed.into();
-                let (dk, _) = <$param as FromSeed>::from_seed(&seed_arr);
-                seed_arr[..].zeroize();
-                seed.zeroize();
-                Ok(Self(dk))
-            }
-        }
-
-        /// An ML-KEM public key, i.e., an ML-KEM encapsulation key.
-        #[derive(Clone, Debug, PartialEq, Eq)]
-        pub struct $pk(EncapsulationKey<$param>);
-
-        impl Serializable for $pk {
-            // Npk per draft-ietf-hpke-pq-04 §3
-            type OutputSize = <EncapsulationKey<$param> as KeySizeUser>::KeySize;
-
-            fn write_exact(&self, buf: &mut [u8]) {
-                // Check the length is correct and panic if not
-                enforce_outbuf_len::<Self>(buf);
-                // Serialize is identity over the fixed-length encapsulation key
-                buf.copy_from_slice(&self.0.to_bytes());
-            }
-        }
-
-        impl Deserializable for $pk {
-            fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
-                // Check the input buf length is correct and error if not
-                enforce_equal_len(Self::OutputSize::USIZE, encoded.len())?;
-                // Infallible because of the check above
-                let ek = EncapsulationKey::<$param>::new(encoded.try_into().expect("correct length"))
-                    .map_err(|_| HpkeError::ValidationError)?;
-                Ok($pk(ek))
-            }
-        }
-
-        /// An ML-KEM encapsulated key, i.e., an ML-KEM ciphertext.
-        #[derive(Clone)]
-        pub struct $enc(Ciphertext<$param>);
-
-        impl Serializable for $enc {
-            // Nenc per draft-ietf-hpke-pq-04 §3
-            type OutputSize = <$param as KemCore>::CiphertextSize;
-
-            fn write_exact(&self, buf: &mut [u8]) {
-                // Check the length is correct and panic if not
-                enforce_outbuf_len::<Self>(buf);
-                // Serialize is identity over the fixed-length ciphertext
-                buf.copy_from_slice(&self.0);
-            }
-        }
-
-        impl Deserializable for $enc {
-            fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
-                // Check the input buf length is correct and error if not
-                enforce_equal_len(Self::OutputSize::USIZE, encoded.len())?;
-                // Infallible because of the check above
-                let ct = Ciphertext::<$param>::try_from(encoded).expect("correct length");
-                Ok($enc(ct))
-            }
-        }
-
-        $(#[$kem_doc])*
-        pub struct $kem;
-
-        impl KemTrait for $kem {
-            // Nsecret = 32 per draft-ietf-hpke-pq-04 §3. The HPKE shared secret is the ML-KEM
-            // shared secret directly.
-            type NSecret = U32;
-            // Value from draft-ietf-hpke-pq-04 §3
-            const KEM_ID: u16 = $kem_id;
-
-            type PublicKey = $pk;
-            type PrivateKey = $sk;
-            type EncappedKey = $enc;
-
-            fn sk_to_pk(sk: &Self::PrivateKey) -> Self::PublicKey {
-                $pk(sk.0.encapsulation_key().clone())
-            }
-
-            // From draft-ietf-hpke-pq-04 §3:
-            //   def DeriveKeyPair(ikm):
-            //     dk = SHAKE256.LabeledDerive(ikm, "DeriveKeyPair", "", 64)
-            //     (_, ek) = expandDecapsKey(dk)
-            //     return (dk, ek)
-            fn derive_keypair(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey) {
-                let mut seed = [0u8; 64];
-                let suite_id = kem_suite_id::<Self>();
-                labeled_derive::<Shake256>(
-                    &suite_id,
-                    &[ikm],
-                    b"DeriveKeyPair",
-                    &[b""],
-                    &mut seed,
-                );
-
-                let mut seed_arr = seed.into();
-                let (dk, ek) = <$param as FromSeed>::from_seed(&seed_arr);
-                seed_arr[..].zeroize();
-                seed.zeroize();
-
-                ($sk(dk), $pk(ek))
-            }
-
-            /// Decapsulate the encapsulated key using the recipient's private key. This DOES NOT
-            /// support authenticated encapsulation, i.e., `pk_sender_id` MUST be `None`.
-            ///
-            /// # Panics
-            /// Panics if `pk_sender_id` is `Some`.
-            // From draft-ietf-hpke-pq-04 §3:
-            //   def Decap(enc, skR):
-            //     (expanded_dk, _) = expandDecapsKey(skR)
-            //     return ML-KEM.Decaps(expanded_dk, enc)
-            fn decap(
-                sk_recip: &Self::PrivateKey,
-                pk_sender_id: Option<&Self::PublicKey>,
-                encapped_key: &Self::EncappedKey,
-            ) -> Result<SharedSecret<Self>, HpkeError> {
-                assert!(
-                    pk_sender_id.is_none(),
-                    concat!(
-                        $name,
-                        " doesn't support authenticated encapsulation. Use Base or Psk operation mode."
-                    )
-                );
-
-                let ss = sk_recip.0.decapsulate(&encapped_key.0);
-                Ok(SharedSecret(ss))
-            }
-
-            /// Derives a shared secret and an ephemeral pubkey that the owner of the recipient's
-            /// pubkey can use to derive the same shared secret. This DOES NOT support authenticated
-            /// encapsulation, i.e., `sender_id_keypair` MUST be `None`.
-            ///
-            /// # Panics
-            /// Panics if `sender_id_keypair` is `Some`.
-            // From draft-ietf-hpke-pq-04 §3:
-            //   def Encap(pkR):
-            //     (shared_secret, enc) = ML-KEM.Encaps(pkR)
-            //     return (shared_secret, enc)
-            fn encap_with_rng(
-                pk_recip: &Self::PublicKey,
-                sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-                csprng: &mut impl CryptoRng,
-            ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-                assert!(
-                    sender_id_keypair.is_none(),
-                    concat!(
-                        $name,
-                        " doesn't support authenticated encapsulation. Use Base or Psk operation mode."
-                    )
-                );
-
-                let (ct, ss) = pk_recip.0.encapsulate_with_rng(csprng);
-                Ok((SharedSecret(ss), $enc(ct)))
-            }
-        }
-
-        // Impl the trait necessary for known-answer tests
-        #[cfg(all(test, feature = "kat"))]
-        impl crate::kat_tests::TestableKem for $kem {
-            // There is no encap-with-eph, since that only makes sense for DHKEMs
-            type EphemeralKey = core::convert::Infallible;
-            fn encap_with_eph(
-                _pk_recip: &Self::PublicKey,
-                _sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-                _sk_eph: Self::EphemeralKey,
-            ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-                unimplemented!()
-            }
-
-            fn encap_det(
-                pk_recip: &Self::PublicKey,
-                sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-                randomness: &[u8],
-            ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-                assert!(
-                    sender_id_keypair.is_none(),
-                    concat!($name, " doesn't support authenticated encapsulation")
-                );
-
-                use rand_core::{TryCryptoRng, TryRng};
-                struct FakeCsprng<'a> {
-                    randomness: &'a [u8],
+            impl ConstantTimeEq for PrivateKey {
+                fn ct_eq(&self, other: &Self) -> Choice {
+                    // We can unwrap because every PrivateKey is initialized with `from_seed`
+                    let self_seed: [u8; 64] = self.0.to_seed().unwrap().into();
+                    let other_seed: [u8; 64] = other.0.to_seed().unwrap().into();
+                    self_seed.ct_eq(&other_seed)
                 }
-                impl<'a> TryRng for FakeCsprng<'a> {
-                    type Error = core::convert::Infallible;
+            }
 
-                    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
-                        rand_core::utils::next_word_via_fill(self)
+            impl PartialEq for PrivateKey {
+                fn eq(&self, other: &Self) -> bool {
+                    self.ct_eq(other).into()
+                }
+            }
+            impl Eq for PrivateKey {}
+
+            impl Serializable for PrivateKey {
+                // Nsk = 64 per draft-ietf-hpke-pq-04 §3
+                type OutputSize = U64;
+
+                fn write_exact(&self, buf: &mut [u8]) {
+                    // Check the length is correct and panic if not
+                    enforce_outbuf_len::<Self>(buf);
+                    // We can unwrap because every PrivateKey is initialized with `from_seed`
+                    buf.copy_from_slice(&self.0.to_seed().unwrap());
+                }
+            }
+
+            impl Deserializable for PrivateKey {
+                fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
+                    let mut seed: [u8; 64] = encoded.try_into().map_err(|_| {
+                        HpkeError::IncorrectInputLength(Self::OutputSize::to_usize(), encoded.len())
+                    })?;
+                    let mut seed_arr = seed.into();
+                    let (dk, _) = <$param as FromSeed>::from_seed(&seed_arr);
+                    seed_arr[..].zeroize();
+                    seed.zeroize();
+                    Ok(Self(dk))
+                }
+            }
+
+            /// An ML-KEM public key, i.e., an ML-KEM encapsulation key.
+            #[derive(Clone, Debug, PartialEq, Eq)]
+            pub struct PublicKey(EncapsulationKey<$param>);
+
+            impl Serializable for PublicKey {
+                // Npk per draft-ietf-hpke-pq-04 §3
+                type OutputSize = <EncapsulationKey<$param> as KeySizeUser>::KeySize;
+
+                fn write_exact(&self, buf: &mut [u8]) {
+                    // Check the length is correct and panic if not
+                    enforce_outbuf_len::<Self>(buf);
+                    // Serialize is identity over the fixed-length encapsulation key
+                    buf.copy_from_slice(&self.0.to_bytes());
+                }
+            }
+
+            impl Deserializable for PublicKey {
+                fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
+                    // Check the input buf length is correct and error if not
+                    enforce_equal_len(Self::OutputSize::USIZE, encoded.len())?;
+                    // Infallible because of the check above
+                    let ek = EncapsulationKey::<$param>::new(encoded.try_into().expect("correct length"))
+                        .map_err(|_| HpkeError::ValidationError)?;
+                    Ok(PublicKey(ek))
+                }
+            }
+
+            /// An ML-KEM encapsulated key, i.e., an ML-KEM ciphertext.
+            #[derive(Clone)]
+            pub struct EncappedKey(Ciphertext<$param>);
+
+            impl Serializable for EncappedKey {
+                // Nenc per draft-ietf-hpke-pq-04 §3
+                type OutputSize = <$param as KemCore>::CiphertextSize;
+
+                fn write_exact(&self, buf: &mut [u8]) {
+                    // Check the length is correct and panic if not
+                    enforce_outbuf_len::<Self>(buf);
+                    // Serialize is identity over the fixed-length ciphertext
+                    buf.copy_from_slice(&self.0);
+                }
+            }
+
+            impl Deserializable for EncappedKey {
+                fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
+                    // Check the input buf length is correct and error if not
+                    enforce_equal_len(Self::OutputSize::USIZE, encoded.len())?;
+                    // Infallible because of the check above
+                    let ct = Ciphertext::<$param>::try_from(encoded).expect("correct length");
+                    Ok(EncappedKey(ct))
+                }
+            }
+
+            $(#[$kem_doc])*
+            pub struct $kem;
+
+            impl KemTrait for $kem {
+                // Nsecret = 32 per draft-ietf-hpke-pq-04 §3. The HPKE shared secret is the ML-KEM
+                // shared secret directly.
+                type NSecret = U32;
+                // Value from draft-ietf-hpke-pq-04 §3
+                const KEM_ID: u16 = $kem_id;
+
+                type PublicKey = PublicKey;
+                type PrivateKey = PrivateKey;
+                type EncappedKey = EncappedKey;
+
+                fn sk_to_pk(sk: &Self::PrivateKey) -> Self::PublicKey {
+                    PublicKey(sk.0.encapsulation_key().clone())
+                }
+
+                // From draft-ietf-hpke-pq-04 §3:
+                //   def DeriveKeyPair(ikm):
+                //     dk = SHAKE256.LabeledDerive(ikm, "DeriveKeyPair", "", 64)
+                //     (_, ek) = expandDecapsKey(dk)
+                //     return (dk, ek)
+                fn derive_keypair(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey) {
+                    let mut seed = [0u8; 64];
+                    let suite_id = kem_suite_id::<Self>();
+                    labeled_derive::<Shake256>(
+                        &suite_id,
+                        &[ikm],
+                        b"DeriveKeyPair",
+                        &[b""],
+                        &mut seed,
+                    );
+
+                    let mut seed_arr = seed.into();
+                    let (dk, ek) = <$param as FromSeed>::from_seed(&seed_arr);
+                    seed_arr[..].zeroize();
+                    seed.zeroize();
+
+                    (PrivateKey(dk), PublicKey(ek))
+                }
+
+                /// Decapsulate the encapsulated key using the recipient's private key. This DOES NOT
+                /// support authenticated encapsulation, i.e., `pk_sender_id` MUST be `None`.
+                ///
+                /// # Panics
+                /// Panics if `pk_sender_id` is `Some`.
+                // From draft-ietf-hpke-pq-04 §3:
+                //   def Decap(enc, skR):
+                //     (expanded_dk, _) = expandDecapsKey(skR)
+                //     return ML-KEM.Decaps(expanded_dk, enc)
+                fn decap(
+                    sk_recip: &Self::PrivateKey,
+                    pk_sender_id: Option<&Self::PublicKey>,
+                    encapped_key: &Self::EncappedKey,
+                ) -> Result<SharedSecret<Self>, HpkeError> {
+                    assert!(
+                        pk_sender_id.is_none(),
+                        concat!(
+                            stringify!($kem),
+                            " doesn't support authenticated encapsulation. Use Base or Psk operation mode."
+                        )
+                    );
+
+                    let ss = sk_recip.0.decapsulate(&encapped_key.0);
+                    Ok(SharedSecret(ss))
+                }
+
+                /// Derives a shared secret and an ephemeral pubkey that the owner of the recipient's
+                /// pubkey can use to derive the same shared secret. This DOES NOT support authenticated
+                /// encapsulation, i.e., `sender_id_keypair` MUST be `None`.
+                ///
+                /// # Panics
+                /// Panics if `sender_id_keypair` is `Some`.
+                // From draft-ietf-hpke-pq-04 §3:
+                //   def Encap(pkR):
+                //     (shared_secret, enc) = ML-KEM.Encaps(pkR)
+                //     return (shared_secret, enc)
+                fn encap_with_rng(
+                    pk_recip: &Self::PublicKey,
+                    sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+                    csprng: &mut impl CryptoRng,
+                ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+                    assert!(
+                        sender_id_keypair.is_none(),
+                        concat!(
+                            stringify!($kem),
+                            " doesn't support authenticated encapsulation. Use Base or Psk operation mode."
+                        )
+                    );
+
+                    let (ct, ss) = pk_recip.0.encapsulate_with_rng(csprng);
+                    Ok((SharedSecret(ss), EncappedKey(ct)))
+                }
+            }
+
+            // Impl the trait necessary for known-answer tests
+            #[cfg(all(test, feature = "kat"))]
+            impl crate::kat_tests::TestableKem for $kem {
+                // There is no encap-with-eph, since that only makes sense for DHKEMs
+                type EphemeralKey = core::convert::Infallible;
+                fn encap_with_eph(
+                    _pk_recip: &Self::PublicKey,
+                    _sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+                    _sk_eph: Self::EphemeralKey,
+                ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+                    unimplemented!()
+                }
+
+                fn encap_det(
+                    pk_recip: &Self::PublicKey,
+                    sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+                    randomness: &[u8],
+                ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+                    assert!(
+                        sender_id_keypair.is_none(),
+                        concat!(stringify!(kem), " doesn't support authenticated encapsulation")
+                    );
+
+                    use rand_core::{TryCryptoRng, TryRng};
+                    struct FakeCsprng<'a> {
+                        randomness: &'a [u8],
                     }
+                    impl<'a> TryRng for FakeCsprng<'a> {
+                        type Error = core::convert::Infallible;
 
-                    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
-                        rand_core::utils::next_word_via_fill(self)
-                    }
+                        fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+                            rand_core::utils::next_word_via_fill(self)
+                        }
 
-                    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
-                        if dest.len() > self.randomness.len() {
-                            unreachable!("ran out of randomness")
-                        } else {
-                            let (taken, rest) = self.randomness.split_at(dest.len());
-                            dest.copy_from_slice(taken);
-                            self.randomness = rest;
-                            Ok(())
+                        fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+                            rand_core::utils::next_word_via_fill(self)
+                        }
+
+                        fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
+                            if dest.len() > self.randomness.len() {
+                                unreachable!("ran out of randomness")
+                            } else {
+                                let (taken, rest) = self.randomness.split_at(dest.len());
+                                dest.copy_from_slice(taken);
+                                self.randomness = rest;
+                                Ok(())
+                            }
                         }
                     }
-                }
-                impl<'a> TryCryptoRng for FakeCsprng<'a> {}
+                    impl<'a> TryCryptoRng for FakeCsprng<'a> {}
 
-                $kem::encap_with_rng(
-                    pk_recip,
-                    sender_id_keypair,
-                    &mut FakeCsprng { randomness },
-                )
+                    $kem::encap_with_rng(
+                        pk_recip,
+                        sender_id_keypair,
+                        &mut FakeCsprng { randomness },
+                    )
+                }
             }
         }
     };
@@ -304,34 +300,26 @@ macro_rules! define_mlkem {
 
 #[cfg(feature = "mlkem768")]
 define_mlkem!(
-    /// Represents the pure ML-KEM-768 post-quantum KEM.
-    MlKem768,
-    MlKem768Params,
-    PublicKey768,
-    PrivateKey768,
-    EncappedKey768,
-    kem_id = 0x0041,
-    "ML-KEM-768"
+    mlkem768,         // mod_name
+    MlKem768,         // kem
+    ml_kem::MlKem768, // param
+    0x0041,           // kem_id
 );
 
 #[cfg(feature = "mlkem1024")]
 define_mlkem!(
-    /// Represents the pure ML-KEM-1024 post-quantum KEM.
-    MlKem1024,
-    MlKem1024Params,
-    PublicKey1024,
-    PrivateKey1024,
-    EncappedKey1024,
-    kem_id = 0x0042,
-    "ML-KEM-1024"
+    mlkem1024,         // mod_name
+    MlKem1024,         // kem
+    ml_kem::MlKem1024, // param
+    0x0042,            // kem_id
 );
 
 #[cfg(test)]
 mod tests {
     #[cfg(feature = "mlkem1024")]
-    use super::MlKem1024;
+    use super::mlkem1024::MlKem1024;
     #[cfg(feature = "mlkem768")]
-    use super::MlKem768;
+    use super::mlkem768::MlKem768;
     use crate::{Deserializable, Kem as KemTrait, Serializable};
 
     macro_rules! test_encap_correctness {
