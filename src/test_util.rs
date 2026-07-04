@@ -11,7 +11,7 @@ use crate::{
 use aead::inout::InOutBuf;
 use hybrid_array::Array;
 use rand::{Rng, RngExt};
-use rand_core::CryptoRng;
+use rand_core::{CryptoRng, TryCryptoRng, TryRng};
 
 /// Returns a random 32-byte buffer
 pub(crate) fn gen_rand_buf() -> [u8; 32] {
@@ -175,3 +175,38 @@ impl Deserializable for core::convert::Infallible {
         unimplemented!()
     }
 }
+
+/// RNG that just reads off the given randomness bytes
+pub(crate) struct FakeCsprng<'a> {
+    randomness: &'a [u8],
+}
+
+impl<'a> FakeCsprng<'a> {
+    pub(crate) fn new(randomness: &'a [u8]) -> Self {
+        Self { randomness }
+    }
+}
+
+impl<'a> TryRng for FakeCsprng<'a> {
+    type Error = core::convert::Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+        rand_core::utils::next_word_via_fill(self)
+    }
+
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+        rand_core::utils::next_word_via_fill(self)
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
+        if dest.len() > self.randomness.len() {
+            unreachable!("ran out of randomness")
+        } else {
+            let (taken, rest) = self.randomness.split_at(dest.len());
+            dest.copy_from_slice(taken);
+            self.randomness = rest;
+            Ok(())
+        }
+    }
+}
+impl<'a> TryCryptoRng for FakeCsprng<'a> {}

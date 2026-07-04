@@ -460,41 +460,10 @@ macro_rules! impl_mlkem_nistp {
                         )
                     );
 
-                    use rand_core::{TryCryptoRng, TryRng};
-
-                    /// RNG that just reads off the given randomness bytes
-                    struct FakeCsprng<'a> {
-                        randomness: &'a [u8],
-                    }
-
-                    impl<'a> TryRng for FakeCsprng<'a> {
-                        type Error = core::convert::Infallible;
-
-                        fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
-                            rand_core::utils::next_word_via_fill(self)
-                        }
-
-                        fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
-                            rand_core::utils::next_word_via_fill(self)
-                        }
-
-                        fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
-                            if dest.len() > self.randomness.len() {
-                                unreachable!("ran out of randomness")
-                            } else {
-                                let (taken, rest) = self.randomness.split_at(dest.len());
-                                dest.copy_from_slice(taken);
-                                self.randomness = rest;
-                                Ok(())
-                            }
-                        }
-                    }
-                    impl<'a> TryCryptoRng for FakeCsprng<'a> {}
-
                     $kem_struct::encap_with_rng(
                         pk_recip,
                         sender_id_keypair,
-                        &mut FakeCsprng { randomness },
+                        &mut crate::test_util::FakeCsprng::new(randomness),
                     )
                 }
             }
