@@ -6,6 +6,7 @@
 
 macro_rules! impl_mlkem_nistp {
     (
+        $(#[$kem_doc:meta])*,
         $mod_name:ident, $kem_struct:ident, $mlkem:ident, $curve:ident,
         $kem_label:expr, $kem_id:expr,
         $pubkey_size:ident, $ct_size:ident,
@@ -192,7 +193,7 @@ macro_rules! impl_mlkem_nistp {
                 }
             }
 
-            /// Hybrid ML-KEM + NIST-P post-quantum KEM.
+            $(#[$kem_doc])*
             pub struct $kem_struct;
 
             impl KemTrait for $kem_struct {
@@ -561,7 +562,8 @@ macro_rules! impl_mlkem_nistp {
 
 #[cfg(feature = "mlkem768p256")]
 impl_mlkem_nistp!(
-    mlkem768p256,     // mod_name
+    #[doc = "ML-KEM 768 + P256 hybrid post-quantum KEM"],
+    mlkem768p256, // mod_name
     MlKem768P256,     // kem_struct
     MlKem768,         // mlkem
     p256,             // curve
@@ -575,6 +577,7 @@ impl_mlkem_nistp!(
 
 #[cfg(feature = "mlkem1024p384")]
 impl_mlkem_nistp!(
+    #[doc = "ML-KEM 1024 + P384 hybrid post-quantum KEM"],
     mlkem1024p384,     // mod_name
     MlKem1024P384,     // kem_struct
     MlKem1024,         // mlkem

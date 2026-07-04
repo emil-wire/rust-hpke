@@ -14,7 +14,7 @@
 /// constants (`CiphertextSize`, `KeySize`, etc.) rather than being supplied as macro arguments.
 macro_rules! define_mlkem {
     (
-        $(#[$kem_doc:meta])*
+        $(#[$kem_doc:meta])*,
         $mod_name:ident,
         $kem:ident,
         $param:ty,
@@ -298,8 +298,11 @@ macro_rules! define_mlkem {
     };
 }
 
+// kem_id is from <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#table-2>
+
 #[cfg(feature = "mlkem768")]
 define_mlkem!(
+    #[doc = "ML-KEM 768 post-quantum KEM"],
     mlkem768,         // mod_name
     MlKem768,         // kem
     ml_kem::MlKem768, // param
@@ -308,6 +311,7 @@ define_mlkem!(
 
 #[cfg(feature = "mlkem1024")]
 define_mlkem!(
+    #[doc = "ML-KEM 1024 post-quantum KEM"],
     mlkem1024,         // mod_name
     MlKem1024,         // kem
     ml_kem::MlKem1024, // param

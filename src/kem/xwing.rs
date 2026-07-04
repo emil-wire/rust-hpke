@@ -111,7 +111,7 @@ impl Deserializable for EncappedKey {
     }
 }
 
-/// Represents The X-Wing hybrid post-quantum KEM
+/// X-Wing (a.k.a ML-KEM 768 + X25519) hybrid post-quantum KEM
 pub struct XWing;
 
 impl XWing {
