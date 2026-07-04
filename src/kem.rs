@@ -34,13 +34,13 @@ pub use mlkem_nistp::mlkem1024p384::MlKem1024P384;
 #[cfg(feature = "mlkem768p256")]
 pub use mlkem_nistp::mlkem768p256::MlKem768P256;
 #[cfg(any(feature = "mlkem768", feature = "mlkem1024"))]
-pub mod mlkem;
+pub(crate) mod mlkem;
 #[cfg(feature = "mlkem1024")]
 pub use mlkem::mlkem1024::MlKem1024;
 #[cfg(feature = "mlkem768")]
 pub use mlkem::mlkem768::MlKem768;
 #[cfg(feature = "xwing")]
-pub mod xwing;
+pub(crate) mod xwing;
 #[cfg(feature = "xwing")]
 pub use xwing::XWing;
 
