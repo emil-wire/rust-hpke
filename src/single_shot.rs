@@ -348,4 +348,31 @@ mod test {
         crate::kem::xwing::XWing,
         false
     );
+
+    #[cfg(all(feature = "mlkem768", feature = "chacha"))]
+    test_single_shot_correctness!(
+        test_single_shot_correctness_mlkem768,
+        ChaCha20Poly1305,
+        crate::kdf::HkdfSha256,
+        crate::kem::mlkem::mlkem768::MlKem768,
+        false
+    );
+
+    #[cfg(all(feature = "mlkem1024", feature = "chacha"))]
+    test_single_shot_correctness!(
+        test_single_shot_correctness_mlkem1024,
+        ChaCha20Poly1305,
+        crate::kdf::HkdfSha256,
+        crate::kem::mlkem::mlkem1024::MlKem1024,
+        false
+    );
+
+    #[cfg(all(feature = "mlkem1024p384", feature = "chacha"))]
+    test_single_shot_correctness!(
+        test_single_shot_correctness_mlkem1024p384,
+        ChaCha20Poly1305,
+        crate::kdf::HkdfSha256,
+        crate::kem::MlKem1024P384,
+        false
+    );
 }

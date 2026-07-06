@@ -6,33 +6,25 @@ rust-hpke
 
 This is an implementation of the [HPKE](https://www.rfc-editor.org/rfc/rfc9180.html) hybrid encryption standard (RFC 9180).
 
-Warning
--------
-
-This crate has not been formally audited. Cloudflare [did a security](https://blog.cloudflare.com/using-hpke-to-encrypt-request-payloads/) review of version 0.8, though:
-
-> The HPKE implementation we decided on comes with the caveat of not yet being
-> formally audited, so we performed our own internal security review. We
-> analyzed the cryptography primitives being used and the corresponding
-> libraries. Between the composition of said primitives and secure programming
-> practices like correctly zeroing memory and safe usage of random number
-> generators, we found no security issues.
-
 What it implements
 ------------------
 
-This implementation complies with the [HPKE standard](https://www.rfc-editor.org/rfc/rfc9180.html) (RFC 9180).
+This implementation complies with the [HPKE standard](https://www.rfc-editor.org/rfc/rfc9180.html) (RFC 9180). It also implements the pure post-quantum KEMs defined in [draft-ietf-hpke-pq-04](https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-04), and the hybrid post-quantum KEMs defined in  [draft-connolly-cfrg-xwing-kem-10](https://datatracker.ietf.org/doc/html/draft-connolly-cfrg-xwing-kem-10), [draft-irtf-cfrg-concrete-hybrid-kems-03](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-concrete-hybrid-kems-03), and [draft-irtf-cfrg-hybrid-kems-11](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hybrid-kems-11) (this is all quite confusing, see Filippo's [summary](https://filippo.io/hpke-pq) of it).
 
 Here are all the primitives listed in the spec. The primitives with checked boxes are the ones that are implemented.
 
-* KEMs
+* Classical KEMs
     - [X] DHKEM(Curve25519, HKDF-SHA256)
     - [ ] DHKEM(Curve448, HKDF-SHA512)
     - [X] DHKEM(P-256, HKDF-SHA256)
     - [X] DHKEM(P-384, HKDF-SHA384)
     - [X] DHKEM(P-521, HKDF-SHA512)
+* Post-quantum and hybrid KEMs
+    - [X] ML-KEM-768
+    - [X] ML-KEM-1024
     - [X] MLKEM768-X25519, aka X-Wing
     - [X] MLKEM768-P256
+    - [X] MLKEM1024-P384
 * KDFs
     - [X] HKDF-SHA256
     - [X] HKDF-SHA384
@@ -53,14 +45,17 @@ Feature flag list:
 
 * `alloc` - Includes allocating methods like `AeadCtxR::open()` and `AeadCtxS::seal()`
 * `getrandom` - Enables top-level functions that use `getrandom` for random number generation, rather than taking in an explicit RNG
+* `aes` - Enables AES-GCM-128 and AES-GCM-256 AEAD algorithms
+* `chacha` - Enables ChaCha20-Poly1305 AEAD algorithm
 * `x25519` - Enables X25519-based KEMs
 * `p256` - Enables NIST P-256-based KEMs
 * `p384` - Enables NIST P-384-based KEMs
 * `p521` - Enables NIST P-521-based KEMs
-* `aes` - Enables AES-GCM-128 and AES-GCM-256 AEAD algorithms
-* `chacha` - Enables ChaCha20-Poly1305 AEAD algorithm
 * `xwing` - Enables the X-Wing (aka MLKEM768-X25519) hybrid post-quantum KEM
 * `mlkem768p256` - Enables the MLKEM768-P256 hybrid post-quantum KEM
+* `mlkem1024p384` - Enables the MLKEM1024-P384 hybrid post-quantum KEM
+* `mlkem768` - Enables the pure ML-KEM-768 post-quantum KEM
+* `mlkem1024` - Enables the pure ML-KEM-1024 post-quantum KEM
 * `kat` - Used only to enabled known-answer tests, which require `std`. Only use with `cargo test`
 
 For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).
@@ -111,7 +106,7 @@ To run all tests, execute `cargo test --all-features`. This includes known-answe
 
 Classical (i.e., non-post-quantum) ciphersuites test against `test-vectors/origrfc-COMMIT_ID.json`,where `COMMIT_ID` is the short commit of the version of the [spec](https://github.com/cfrg/draft-irtf-cfrg-hpke) that the test vectors came from. The finalized spec uses commit `5f503c5`. See the [reference implementation](https://github.com/cisco/go-hpke) for information on how to generate a test vector.
 
-Post-quantum ciphersuites (including hybrid), test against `test-vectors/pq-COMMIT_ID.json` in the same way. The commit ID refers to the [reference implementation](https://github.com/hpkewg/hpke-pq) repo of the PQ extension standard. The JSON file was trimmed to only include test vectors from ciphersuites implemented in this crate.
+Post-quantum ciphersuites (including hybrid), test against `test-vectors/pq-COMMIT_ID.json` in the same way. The commit ID refers to the [reference implementation](https://github.com/hpkewg/hpke-pq) repo of the PQ extension standard.
 
 Hybrid ciphersuites are additionally tested against `test-vectors/hybrid-COMMIT_ID.json`. The commit ID refers to the concrete hybrid HPKE spec [repo](https://github.com/cfrg/draft-irtf-cfrg-concrete-hybrid-kems).
 
@@ -132,6 +127,18 @@ Functions benchmarked in each ciphersuite:
 * `setup_receiver` with OpModes of Base, Auth, Psk, and AuthPsk
 * `AeadCtxS::seal` with plaintext length 64 and AAD length 64
 * `AeadCtxR::open` with ciphertext length 64 and AAD length 64
+
+Audit History
+-------------
+
+To the authors' knowledge, nobody has performed a paid audit of this crate. However, Cloudflare [did a security](https://blog.cloudflare.com/using-hpke-to-encrypt-request-payloads/) review of version 0.8, saying:
+
+> The HPKE implementation we decided on comes with the caveat of not yet being
+> formally audited, so we performed our own internal security review. We
+> analyzed the cryptography primitives being used and the corresponding
+> libraries. Between the composition of said primitives and secure programming
+> practices like correctly zeroing memory and safe usage of random number
+> generators, we found no security issues.
 
 Agility
 -------

@@ -13,14 +13,34 @@ use rand_core::UnwrapErr;
 use subtle::ConstantTimeEq;
 use zeroize::Zeroize;
 
+#[cfg(any(
+    feature = "x25519",
+    feature = "p256",
+    feature = "p384",
+    feature = "p521"
+))]
 mod dhkem;
+#[cfg(any(
+    feature = "x25519",
+    feature = "p256",
+    feature = "p384",
+    feature = "p521"
+))]
 pub use dhkem::*;
+#[cfg(any(feature = "mlkem768p256", feature = "mlkem1024p384"))]
+mod mlkem_nistp;
+#[cfg(feature = "mlkem1024p384")]
+pub use mlkem_nistp::mlkem1024p384::MlKem1024P384;
 #[cfg(feature = "mlkem768p256")]
-pub mod mlkem768p256;
-#[cfg(feature = "mlkem768p256")]
-pub use mlkem768p256::MlKem768P256;
+pub use mlkem_nistp::mlkem768p256::MlKem768P256;
+#[cfg(any(feature = "mlkem768", feature = "mlkem1024"))]
+pub(crate) mod mlkem;
+#[cfg(feature = "mlkem1024")]
+pub use mlkem::mlkem1024::MlKem1024;
+#[cfg(feature = "mlkem768")]
+pub use mlkem::mlkem768::MlKem768;
 #[cfg(feature = "xwing")]
-pub mod xwing;
+pub(crate) mod xwing;
 #[cfg(feature = "xwing")]
 pub use xwing::XWing;
 
@@ -67,6 +87,17 @@ pub trait Kem: Sized {
     }
 
     /// Generates a random keypair using the given RNG
+    // Implementation note: This simply does DeriveKeyPair(random(Nsk)). This does not
+    // match the definition of GenerateKeyPair in the PQ and and XWing implementations
+    //   <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#section-3-7>
+    // and
+    //   <https://www.ietf.org/archive/id/draft-connolly-cfrg-xwing-kem-10.html#section-5.2-2>
+    // In reality, though, we don't care. The goal of this function is to produce a random
+    // keypair, and it guarantees no cross-compatiblity. There are no test vectors for it,
+    // and the original RFC doesn't even define it (merely uses "can be defined")
+    //   <https://datatracker.ietf.org/doc/html/rfc9180#section-4-7>
+    // Thus, for us it suffices to just keep this definition in place. More discussion here
+    //   <https://mailarchive.ietf.org/arch/msg/hpke/v1Jw382gXveSQxsi8RE4S9ep-bY/>
     fn gen_keypair_with_rng(csprng: &mut impl CryptoRng) -> (Self::PrivateKey, Self::PublicKey) {
         // Make some keying material that's the size of a private key
         let mut ikm: Array<u8, <Self::PrivateKey as Serializable>::OutputSize> = Array::default();

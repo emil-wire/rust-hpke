@@ -75,7 +75,8 @@ impl<K: KdfTrait> Drop for ExporterSecret<K> {
 
 /// Initiates an encryption context to the given recipient public key. `info` is a domain separator.
 ///
-/// NOTE: The `XWing` KEM does not support authenticated encapsulation, so `mode` MUST be
+/// NOTE: The post-quantum KEMs (`XWing`, `MlKem768P256`, `MlKem1024P384`, `MlKem768`, and
+/// `MlKem1024`) do not support authenticated encapsulation, so `mode` MUST be
 /// [`Base`](crate::OpModeS::Base) or [`Psk`](crate::OpModeS::Psk).
 ///
 /// Return Value
@@ -105,7 +106,8 @@ where
 
 /// Initiates an encryption context to the given recipient public key. `info` is a domain separator.
 ///
-/// NOTE: The `XWing` KEM does not support authenticated encapsulation, so `mode` MUST be
+/// NOTE: The post-quantum KEMs (`XWing`, `MlKem768P256`, `MlKem1024P384`, `MlKem768`, and
+/// `MlKem1024`) do not support authenticated encapsulation, so `mode` MUST be
 /// [`Base`](crate::OpModeS::Base) or [`Psk`](crate::OpModeS::Psk).
 ///
 /// Return Value
@@ -148,7 +150,8 @@ where
 /// Initiates a decryption context given a private key `sk_recip` and an encapsulated key which was
 /// encapsulated to `sk_recip`'s corresponding public key.   `info` is a domain separator.
 ///
-/// NOTE: The `XWing` KEM does not support authenticated encapsulation, so `mode` MUST be
+/// NOTE: The post-quantum KEMs (`XWing`, `MlKem768P256`, `MlKem1024P384`, `MlKem768`, and
+/// `MlKem1024`) do not support authenticated encapsulation, so `mode` MUST be
 /// [`Base`](crate::OpModeR::Base) or [`Psk`](crate::OpModeR::Psk).
 ///
 /// Return Value

@@ -1,9 +1,12 @@
 use crate::{
     aead::{Aead, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead},
-    kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait, KdfShake128, KdfShake256},
+    kdf::{
+        HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait, KdfShake128, KdfShake256,
+        KdfTurboShake128, KdfTurboShake256,
+    },
     kem::{
-        DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, MlKem768P256,
-        SharedSecret, X25519HkdfSha256, XWing,
+        DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, MlKem1024,
+        MlKem1024P384, MlKem768, MlKem768P256, SharedSecret, X25519HkdfSha256, XWing,
     },
     op_mode::{OpModeR, PskBundle},
     setup::setup_receiver,
@@ -358,14 +361,20 @@ fn classical_pq_and_hybrid() {
     };
 
     for tv in ref_tvs.into_iter().chain(pq_tvs.into_iter()) {
-        // Ignore everything that doesn't use X25519, P256, P384, P521, XWing, or
-        // MLKEM768-P256, since that's all we support right now
-        if tv.kem_id != X25519HkdfSha256::KEM_ID
-            && tv.kem_id != DhP256HkdfSha256::KEM_ID
-            && tv.kem_id != DhP384HkdfSha384::KEM_ID
-            && tv.kem_id != DhP521HkdfSha512::KEM_ID
-            && tv.kem_id != XWing::KEM_ID
-            && tv.kem_id != MlKem768P256::KEM_ID
+        // Ignore everything that doesn't use X25519, P256, P384, P521, XWing,
+        // MLKEM768-P256, MLKEM1024-P384, or MLKEM768/1024 since that's all we support right now
+        if ![
+            X25519HkdfSha256::KEM_ID,
+            DhP256HkdfSha256::KEM_ID,
+            DhP384HkdfSha384::KEM_ID,
+            DhP521HkdfSha512::KEM_ID,
+            XWing::KEM_ID,
+            MlKem768P256::KEM_ID,
+            MlKem1024P384::KEM_ID,
+            MlKem768::KEM_ID,
+            MlKem1024::KEM_ID,
+        ]
+        .contains(&tv.kem_id)
         {
             continue;
         }
@@ -374,21 +383,32 @@ fn classical_pq_and_hybrid() {
         dispatch_testcase!(
             tv,
             (AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead),
-            (HkdfSha256, HkdfSha384, HkdfSha512, KdfShake128, KdfShake256),
+            (
+                HkdfSha256,
+                HkdfSha384,
+                HkdfSha512,
+                KdfShake128,
+                KdfShake256,
+                KdfTurboShake128,
+                KdfTurboShake256
+            ),
             (
                 X25519HkdfSha256,
                 DhP256HkdfSha256,
                 DhP384HkdfSha384,
                 DhP521HkdfSha512,
                 XWing,
-                MlKem768P256
+                MlKem768P256,
+                MlKem1024P384,
+                MlKem768,
+                MlKem1024
             )
         );
 
         // The above macro has a `continue` in every branch. We only get to this line if it failed
         // to match every combination of the above primitives.
         panic!(
-            "Unrecognized (AEAD ID, KDF ID, KEM ID) combo: ({}, {}, {})",
+            "Unrecognized (AEAD ID, KDF ID, KEM ID) combo: ({:x}, {:x}, {:x})",
             tv.aead_id, tv.kdf_id, tv.kem_id
         );
     }
@@ -420,8 +440,38 @@ struct HybridTestVector {
 struct HybridTestVectors {
     mlkem768_p256: Vec<HybridTestVector>,
     mlkem768_x25519: Vec<HybridTestVector>,
-    #[serde(skip)] // We don't support these yet
-    _mlkem1024_p384: Vec<HybridTestVector>,
+    mlkem1024_p384: Vec<HybridTestVector>,
+}
+
+macro_rules! test_hybrid_vector {
+    ($kem:ty, $tv:ident, unpack_dk) => {
+        test_hybrid_vector!($kem, $tv);
+
+        // With the unpack_dk option, we can unpack the private key and compare against the test vector
+        let dk = <$kem as KemTrait>::PrivateKey::from_bytes(&$tv.decapsulation_key).unwrap();
+        assert_eq!(
+            dk.dk_t.to_bytes().as_slice(),
+            $tv.decapsulation_key_t.as_slice()
+        );
+        assert_eq!(
+            dk.dk_pq.to_bytes().as_slice(),
+            $tv.decapsulation_key_pq.as_slice()
+        );
+    };
+
+    ($kem:ty, $tv:ident) => {
+        let dk = <$kem as KemTrait>::PrivateKey::from_bytes(&$tv.decapsulation_key).unwrap();
+        let ek = <$kem as KemTrait>::PublicKey::from_bytes(&$tv.encapsulation_key).unwrap();
+        assert_eq!(<$kem>::sk_to_pk(&dk), ek);
+
+        let (ss, ct) = <$kem>::encap_det(&ek, None, &$tv.randomness).unwrap();
+        assert_eq!(ss.0.as_slice(), $tv.shared_secret.as_slice());
+        assert_eq!(ct.to_bytes().as_slice(), $tv.ciphertext);
+
+        let enc = <$kem as KemTrait>::EncappedKey::from_bytes(&$tv.ciphertext).unwrap();
+        let ss = <$kem>::decap(&dk, None, &enc).unwrap();
+        assert_eq!(ss.0.as_slice(), $tv.shared_secret.as_slice());
+    };
 }
 
 // This known-answer test uses the test vectors from the concrete hybrid spec (see README for more
@@ -433,54 +483,15 @@ fn hybrid() {
         serde_json::from_reader(file).unwrap()
     };
 
-    // Test MLKEM768-P256
     for tv in hybrid_tvs.mlkem768_p256 {
-        let dk = <MlKem768P256 as KemTrait>::PrivateKey::from_bytes(&tv.decapsulation_key).unwrap();
-        assert_eq!(
-            dk.dk_t.to_bytes().as_slice(),
-            tv.decapsulation_key_t.as_slice()
-        );
-        assert_eq!(
-            dk.dk_pq.to_bytes().as_slice(),
-            tv.decapsulation_key_pq.as_slice()
-        );
-
-        let ek = <MlKem768P256 as KemTrait>::PublicKey::from_bytes(&tv.encapsulation_key).unwrap();
-        assert_eq!(MlKem768P256::sk_to_pk(&dk), ek);
-
-        let (ss, ct) = MlKem768P256::encap_det(&ek, None, &tv.randomness).unwrap();
-        assert_eq!(ss.0.as_slice(), tv.shared_secret.as_slice());
-        assert_eq!(ct.to_bytes().as_slice(), tv.ciphertext);
-
-        let enc = <MlKem768P256 as KemTrait>::EncappedKey::from_bytes(&tv.ciphertext).unwrap();
-        let ss = MlKem768P256::decap(&dk, None, &enc).unwrap();
-        assert_eq!(ss.0.as_slice(), tv.shared_secret.as_slice());
+        test_hybrid_vector!(MlKem768P256, tv, unpack_dk);
     }
-
-    // Test XWing
+    for tv in hybrid_tvs.mlkem1024_p384 {
+        test_hybrid_vector!(MlKem1024P384, tv, unpack_dk);
+    }
     for tv in hybrid_tvs.mlkem768_x25519 {
-        let dk = <XWing as KemTrait>::PrivateKey::from_bytes(&tv.decapsulation_key).unwrap();
-        /* We need to skip these asserts because we can't introspect into the XWing secret key from
-         * this crate
-        assert_eq!(
-            dk.dk_t.to_bytes().as_slice(),
-            tv.decapsulation_key_t.as_slice()
-        );
-        assert_eq!(
-            dk.dk_pq.to_bytes().as_slice(),
-            tv.decapsulation_key_pq.as_slice()
-        );
-        */
-
-        let ek = <XWing as KemTrait>::PublicKey::from_bytes(&tv.encapsulation_key).unwrap();
-        assert_eq!(XWing::sk_to_pk(&dk), ek);
-
-        let (ss, ct) = XWing::encap_det(&ek, None, &tv.randomness).unwrap();
-        assert_eq!(ss.0.as_slice(), tv.shared_secret.as_slice());
-        assert_eq!(ct.to_bytes().as_slice(), tv.ciphertext);
-
-        let enc = <XWing as KemTrait>::EncappedKey::from_bytes(&tv.ciphertext).unwrap();
-        let ss = XWing::decap(&dk, None, &enc).unwrap();
-        assert_eq!(ss.0.as_slice(), tv.shared_secret.as_slice());
+        // Note we skip "unpack_dk" because the XWing crate doesn't expose the secret key
+        // internals to us
+        test_hybrid_vector!(XWing, tv);
     }
 }

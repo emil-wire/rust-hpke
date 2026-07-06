@@ -1,13 +1,15 @@
+//! X25519 and NIST-P DHKEMs
+
 /// Defines DHKEM(G, K) given a Diffie-Hellman group G and KDF K
 macro_rules! impl_dhkem {
     (
+        $(#[$kem_doc:meta])*,
         $feature_flag:literal,
         $mod_name:ident,
         $kem_name:ident,
         $dhkex:ty,
         $kdf:ty,
         $kem_id:literal,
-        $doc_str:expr
     ) => {
         #[cfg(feature = $feature_flag)]
         pub use $mod_name::$kem_name;
@@ -66,7 +68,7 @@ macro_rules! impl_dhkem {
             }
 
             // Define the KEM struct
-            #[doc = $doc_str]
+            $(#[$kem_doc])*
             pub struct $kem_name;
 
             // RFC 9180 §4.1
@@ -416,44 +418,44 @@ macro_rules! impl_dhkem {
 
 // Implement DHKEM(X25519, HKDF-SHA256)
 impl_dhkem!(
+    #[doc = "DHKEM(X25519, HKDF-SHA256) classical KEM"],
     "x25519",
     x25519_hkdfsha256,
     X25519HkdfSha256,
     crate::dhkex::x25519::X25519,
     crate::kdf::HkdfSha256,
     0x0020,
-    "Represents DHKEM(X25519, HKDF-SHA256)"
 );
 
 // Implement DHKEM(P-256, HKDF-SHA256)
 impl_dhkem!(
+    #[doc = "DHKEM(P-256, HKDF-SHA256) classical KEM"],
     "p256",
     dhp256_hkdfsha256,
     DhP256HkdfSha256,
     crate::dhkex::ecdh_nistp::p256::DhP256,
     crate::kdf::HkdfSha256,
     0x0010,
-    "Represents DHKEM(P-256, HKDF-SHA256)"
 );
 
 // Implement DHKEM(P-384, HKDF-SHA384)
 impl_dhkem!(
+    #[doc = "DHKEM(P-384, HKDF-SHA384) classical KEM"],
     "p384",
     dhp384_hkdfsha384,
     DhP384HkdfSha384,
     crate::dhkex::ecdh_nistp::p384::DhP384,
     crate::kdf::HkdfSha384,
     0x0011,
-    "Represents DHKEM(P-384, HKDF-SHA384)"
 );
 
 // Implement DHKEM(P-521, HKDF-SHA512)
 impl_dhkem!(
+    #[doc = "DHKEM(P-521, HKDF-SHA512) classical KEM"],
     "p521",
     dhp521_hkdfsha512,
     DhP521HkdfSha512,
     crate::dhkex::ecdh_nistp::p521::DhP521,
     crate::kdf::HkdfSha512,
     0x0012,
-    "Represents DHKEM(P-521, HKDF-SHA512)"
 );

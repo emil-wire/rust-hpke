@@ -1,5 +1,7 @@
-//! The X-Wing hybrid PQ KEM, aka MLKEM768-X25519. Implemented as per <https://filippo.io/hpke-pq>,
-//! which itself derives from <https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-03>
+//! The X-Wing hybrid PQ KEM, aka MLKEM768-X25519
+//!
+//! Implemented as per <https://filippo.io/hpke-pq>, which itself derives from
+//! <https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-03>
 
 use crate::{
     kdf::one_stage_kdf::labeled_derive,
@@ -109,7 +111,7 @@ impl Deserializable for EncappedKey {
     }
 }
 
-/// Represents The X-Wing hybrid post-quantum KEM
+/// X-Wing (a.k.a ML-KEM 768 + X25519) hybrid post-quantum KEM
 pub struct XWing;
 
 impl XWing {
