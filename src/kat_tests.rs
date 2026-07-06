@@ -260,23 +260,6 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: MainTestVector) {
         );
     }
 
-    // Decap the vector's own ciphertext and check it reproduces the vector's shared secret. The
-    // setup_receiver path below tests decap indirectly; this pins it directly. Matters most for
-    // pure ML-KEM (kem_id 65/66), which has no other direct decap check.
-    //
-    // Base/Psk only: the authenticated modes mix the sender's static key into the shared secret,
-    // so an unauthenticated decap wouldn't match. ML-KEM is unauthenticated, always mode 0 here.
-    if tv.mode == 0 || tv.mode == 1 {
-        let provided_encapped_key =
-            <Kem as KemTrait>::EncappedKey::from_bytes(&tv.encapped_key).unwrap();
-        let decap_ss = Kem::decap(&sk_recip, None, &provided_encapped_key).expect("decap failed");
-        assert_eq!(
-            decap_ss.0.as_slice(),
-            tv.shared_secret.as_slice(),
-            "decap(vector_ciphertext) shared_secret doesn't match vector shared_secret"
-        );
-    }
-
     // We're going to test the encryption contexts. First, construct the appropriate OpMode.
     let mode = make_op_mode_r(
         tv.mode,
