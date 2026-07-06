@@ -262,7 +262,7 @@ impl KdfTrait for HkdfSha512 {
 pub struct KdfShake128 {}
 
 impl KdfTrait for KdfShake128 {
-    // https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-03#section-5
+    // From <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#table-1>
     const KDF_ID: u16 = 0x0010;
     type Nh = U32;
 
@@ -315,7 +315,7 @@ impl KdfTrait for KdfShake128 {
 pub struct KdfShake256 {}
 
 impl KdfTrait for KdfShake256 {
-    // https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-03#section-5
+    // From <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#table-1>
     const KDF_ID: u16 = 0x0011;
     type Nh = U64;
 
@@ -364,11 +364,11 @@ impl KdfTrait for KdfShake256 {
     }
 }
 
-/// The implementation of SHAKE128 KDF
+/// The implementation of TurboSHAKE128 KDF
 pub struct KdfTurboShake128 {}
 
 impl KdfTrait for KdfTurboShake128 {
-    // https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-03#section-5
+    // From <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#table-1>
     const KDF_ID: u16 = 0x0012;
     type Nh = U32;
 
@@ -423,7 +423,7 @@ impl KdfTrait for KdfTurboShake128 {
 pub struct KdfTurboShake256 {}
 
 impl KdfTrait for KdfTurboShake256 {
-    // https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-03#section-5
+    // From <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#table-1>
     const KDF_ID: u16 = 0x0013;
     type Nh = U64;
 
