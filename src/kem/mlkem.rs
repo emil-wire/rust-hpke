@@ -63,7 +63,7 @@ macro_rules! define_mlkem {
             impl Eq for PrivateKey {}
 
             impl Serializable for PrivateKey {
-                // Nsk = 64 per draft-ietf-hpke-pq-04 §3
+                // Nsk = 64 per <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#table-2>
                 type OutputSize = U64;
 
                 fn write_exact(&self, buf: &mut [u8]) {
@@ -92,7 +92,7 @@ macro_rules! define_mlkem {
             pub struct PublicKey(EncapsulationKey<$param>);
 
             impl Serializable for PublicKey {
-                // Npk per draft-ietf-hpke-pq-04 §3
+                // Npk per <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#table-2>
                 type OutputSize = <EncapsulationKey<$param> as KeySizeUser>::KeySize;
 
                 fn write_exact(&self, buf: &mut [u8]) {
@@ -108,18 +108,18 @@ macro_rules! define_mlkem {
                     // Check the input buf length is correct and error if not
                     enforce_equal_len(Self::OutputSize::USIZE, encoded.len())?;
                     // Infallible because of the check above
-                    let ek = EncapsulationKey::<$param>::new(encoded.try_into().expect("correct length"))
+                    let ek = EncapsulationKey::<$param>::new(encoded.try_into().unwrap())
                         .map_err(|_| HpkeError::ValidationError)?;
                     Ok(PublicKey(ek))
                 }
             }
 
-            /// An ML-KEM encapsulated key, i.e., an ML-KEM ciphertext.
+            /// An ML-KEM encapsulated key (a.k.a. ciphertext)
             #[derive(Clone)]
             pub struct EncappedKey(Ciphertext<$param>);
 
             impl Serializable for EncappedKey {
-                // Nenc per draft-ietf-hpke-pq-04 §3
+                // Nenc per <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#table-2>
                 type OutputSize = <$param as KemCore>::CiphertextSize;
 
                 fn write_exact(&self, buf: &mut [u8]) {
@@ -144,10 +144,10 @@ macro_rules! define_mlkem {
             pub struct $kem;
 
             impl KemTrait for $kem {
-                // Nsecret = 32 per draft-ietf-hpke-pq-04 §3. The HPKE shared secret is the ML-KEM
-                // shared secret directly.
+                // Nsecret = 32 per
+                // <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#table-2>. The HPKE
+                // shared secret is just the ML-KEM shared secret
                 type NSecret = U32;
-                // Value from draft-ietf-hpke-pq-04 §3
                 const KEM_ID: u16 = $kem_id;
 
                 type PublicKey = PublicKey;
@@ -158,10 +158,10 @@ macro_rules! define_mlkem {
                     PublicKey(sk.0.encapsulation_key().clone())
                 }
 
-                // From draft-ietf-hpke-pq-04 §3:
+                // From <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#section-3-3>
                 //   def DeriveKeyPair(ikm):
                 //     dk = SHAKE256.LabeledDerive(ikm, "DeriveKeyPair", "", 64)
-                //     (_, ek) = expandDecapsKey(dk)
+                //     (_expanded_dk, ek) = expandDecapsKey(dk)
                 //     return (dk, ek)
                 fn derive_keypair(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey) {
                     let mut seed = [0u8; 64];
@@ -182,14 +182,14 @@ macro_rules! define_mlkem {
                     (PrivateKey(dk), PublicKey(ek))
                 }
 
-                /// Decapsulate the encapsulated key using the recipient's private key. This DOES NOT
-                /// support authenticated encapsulation, i.e., `pk_sender_id` MUST be `None`.
+                /// Decapsulate the encapsulated key using the recipient's private key. This DOES
+                /// NOT support authenticated encapsulation, i.e., `pk_sender_id` MUST be `None`.
                 ///
                 /// # Panics
                 /// Panics if `pk_sender_id` is `Some`.
-                // From draft-ietf-hpke-pq-04 §3:
+                // From <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#section-3-11>:
                 //   def Decap(enc, skR):
-                //     (expanded_dk, _) = expandDecapsKey(skR)
+                //     (expanded_dk, _ek) = expandDecapsKey(skR)
                 //     return ML-KEM.Decaps(expanded_dk, enc)
                 fn decap(
                     sk_recip: &Self::PrivateKey,
@@ -200,7 +200,8 @@ macro_rules! define_mlkem {
                         pk_sender_id.is_none(),
                         concat!(
                             stringify!($kem),
-                            " doesn't support authenticated encapsulation. Use Base or Psk operation mode."
+                            " doesn't support authenticated encapsulation. \
+                            Use Base or Psk operation mode."
                         )
                     );
 
@@ -208,16 +209,15 @@ macro_rules! define_mlkem {
                     Ok(SharedSecret(ss))
                 }
 
-                /// Derives a shared secret and an ephemeral pubkey that the owner of the recipient's
-                /// pubkey can use to derive the same shared secret. This DOES NOT support authenticated
-                /// encapsulation, i.e., `sender_id_keypair` MUST be `None`.
+                /// Derives a shared secret and an ephemeral pubkey that the owner of the
+                /// recipient's pubkey can use to derive the same shared secret. This DOES NOT
+                /// support authenticated encapsulation, i.e., `sender_id_keypair` MUST be `None`.
                 ///
                 /// # Panics
                 /// Panics if `sender_id_keypair` is `Some`.
-                // From draft-ietf-hpke-pq-04 §3:
-                //   def Encap(pkR):
-                //     (shared_secret, enc) = ML-KEM.Encaps(pkR)
-                //     return (shared_secret, enc)
+                // From <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#section-3-9>:
+                //   The Encap function corresponds to the function ML-KEM.Encaps in [FIPS203],
+                //   where an ML-KEM encapsulation key check failure causes an HPKE EncapError.
                 fn encap_with_rng(
                     pk_recip: &Self::PublicKey,
                     sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
@@ -227,7 +227,8 @@ macro_rules! define_mlkem {
                         sender_id_keypair.is_none(),
                         concat!(
                             stringify!($kem),
-                            " doesn't support authenticated encapsulation. Use Base or Psk operation mode."
+                            " doesn't support authenticated encapsulation. \
+                            Use Base or Psk operation mode."
                         )
                     );
 
@@ -355,7 +356,7 @@ mod tests {
     #[cfg(feature = "mlkem1024")]
     test_encapped_serialize!(test_encapped_serialize_mlkem1024, MlKem1024);
 
-    /// Tests that the wire sizes match the constants in draft-ietf-hpke-pq-04 §3
+    /// Tests that the wire sizes match the constants in <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#table-2>
     #[cfg(feature = "mlkem768")]
     #[test]
     fn sizes_match_spec_mlkem768() {
