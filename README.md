@@ -39,24 +39,32 @@ Here are all the primitives listed in the spec. The primitives with checked boxe
 Crate Features
 --------------
 
-Default features flags: `getrandom`, `alloc`, `x25519`, `p256`, `aes`, `chacha`.
+The feature flags in this crate allow end-users to avoid pulling in dependencies they don't want. We thus take an **additive approach** to features: if you want hybrid post-quantum KEMs, you need to pull in the individual features it relies on. All is explained below.
 
-Feature flag list:
+### Feature Flags
 
-* `alloc` - Includes allocating methods like `AeadCtxR::open()` and `AeadCtxS::seal()`
-* `getrandom` - Enables top-level functions that use `getrandom` for random number generation, rather than taking in an explicit RNG
-* `aes` - Enables AES-GCM-128 and AES-GCM-256 AEAD algorithms
-* `chacha` - Enables ChaCha20-Poly1305 AEAD algorithm
-* `x25519` - Enables X25519-based KEMs
-* `p256` - Enables NIST P-256-based KEMs
-* `p384` - Enables NIST P-384-based KEMs
-* `p521` - Enables NIST P-521-based KEMs
-* `xwing` - Enables the X-Wing (aka MLKEM768-X25519) hybrid post-quantum KEM
-* `mlkem768p256` - Enables the MLKEM768-P256 hybrid post-quantum KEM
-* `mlkem1024p384` - Enables the MLKEM1024-P384 hybrid post-quantum KEM
-* `mlkem768` - Enables the pure ML-KEM-768 post-quantum KEM
-* `mlkem1024` - Enables the pure ML-KEM-1024 post-quantum KEM
+Default features flags: `getrandom`, `alloc`, `chacha`, `x25519`, `mlkem`. Note this combination means that XWing is enabled by default, as well as all (Turbo)SHAKE KDFs.
+
+* `alloc` - Exposes allocating methods like `AeadCtxR::open()` and `AeadCtxS::seal()`
+* `getrandom` (default) - Enables top-level functions that use `getrandom` for random number generation, rather than taking in an explicit RNG
+* AEADs:
+  * `chacha` — Enables ChaCha20-Poly1305
+  * `aes` — Enables AES-GCM-128/256
+* KEMs:
+  * `x25519` — Enables the X25519 DHKEM (also enables `hkdfsha2`)
+  * `nistp` — Enables the ECDH-NIST P-256, P-384, and P-521 DHKEMs (also enables `hkdfsha2`)
+  * `mlkem` — Enables the ML-KEM-768 and ML-KEM-1024 post-quantum KEMs (also enables `shake`)
+* KDFs:
+  * `hkdfsha2` — Enables HKDF-SHA256/384/512
+  * `shake` — Enables SHAKE128/256 and TurboSHAKE128/256
+* `hazmat-streaming-enc` — Exposes the underlying streaming AEAD context used in HPKE. **DO NOT USE** unless you really know what you're doing.
 * `kat` - Used only to enabled known-answer tests, which require `std`. Only use with `cargo test`
+
+### Feature Combinations
+
+We list the additional functionality that certain feature combinations enable:
+* `x25519,mlkem` (default) — Enables the ML-KEM-768+X25519 (aka XWing) hybrid post-quantum KEM
+* `nistp,mlkem` — Enables the ML-KEM + NIST-P hybrid post-quantum KEMs
 
 For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).
 
@@ -117,14 +125,19 @@ To run all benchmarks, execute `cargo bench --all-features`. If you set your own
 
 Ciphersuites benchmarked:
 
-* NIST Ciphersuite with 128-bit security: AES-GCM-128, HKDF-SHA256, ECDH-P256
-* Non-NIST Ciphersuite with 128-bit security: ChaCha20-Poly1305, HKDF-SHA256, X25519
+* Classical NIST Ciphersuite with 128-bit security: AES-GCM-128, HKDF-SHA256, ECDH-P256
+* Classical Non-NIST Ciphersuite with 128-bit security: ChaCha20-Poly1305, HKDF-SHA256, X25519
+* Pure-PQ NIST Ciphersuite with 128-bit security: AES-GCM-128, SHAKE128, MLKEM768
+* Pure-PQ NIST Ciphersuite with 256-bit security: AES-GCM-256, SHAKE256, MLKEM1024
+* Hybrid-PQ NIST Ciphersuite with 128-bit security: AES-GCM-128, SHAKE128, MLKEM768-P256
+* Hybrid-PQ NIST Ciphersuite with 256-bit security: AES-GCM-256, SHAKE256, MLKEM1024-P384
+* Hybrid-PQ Non-NIST Ciphersuite with 128-bit security: ChaCha20-Poly1305, TurboSHAKE128, XWing
 
 Functions benchmarked in each ciphersuite:
 
 * `Kem::gen_keypair`
-* `setup_sender` with OpModes of Base, Auth, Psk, and AuthPsk
-* `setup_receiver` with OpModes of Base, Auth, Psk, and AuthPsk
+* `setup_sender` with OpModes of Base, Auth, Psk, and AuthPsk (Auth* modes omitted if unsupported)
+* `setup_receiver` with OpModes of Base, Auth, Psk, and AuthPsk (Auth* modes omitted if unsupported)
 * `AeadCtxS::seal` with plaintext length 64 and AAD length 64
 * `AeadCtxR::open` with ciphertext length 64 and AAD length 64
 
@@ -145,7 +158,9 @@ Agility
 
 A definition: *crypto agility* refers to the ability of a cryptosystem or protocol to vary its underlying primitives. For example, TLS has "crypto agility" in that you can run the protocol with many different ciphersuites.
 
-This crate does not support crypto agility out of the box. This is because the cryptographic primitives are encoded as types satisfying certain constraints, and types need to be determined at compile time (broadly speaking). That said, there is nothing preventing you from implementing agility yourself. There is a [sample implementation](examples/agility.rs) in the examples folder. The sample implementation is messy because agility is messy.
+This crate does not support crypto agility out of the box. This is because the cryptographic primitives are encoded as types satisfying certain constraints, and types need to be determined at compile time (broadly speaking). Purely for the sake of demonstration, there is a [sample implementation](examples/agility.rs) in the examples folder. The sample implementation is messy because agility is messy.
+
+If you want agility, you can use the [`hpke-dispatch`](https://crates.io/crates/hpke-dispatch) crate.
 
 License
 -------
