@@ -121,6 +121,7 @@ pub use rand_core;
 mod util;
 
 pub mod aead;
+pub mod danger;
 #[cfg(any(feature = "x25519", feature = "nistp"))]
 mod dhkex;
 pub mod kdf;
@@ -128,8 +129,6 @@ pub mod kem;
 mod op_mode;
 mod setup;
 mod single_shot;
-#[cfg(feature = "hazmat-streaming-enc")]
-pub mod streaming_enc;
 
 #[doc(inline)]
 pub use kem::Kem;

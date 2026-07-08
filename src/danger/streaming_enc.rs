@@ -1,20 +1,17 @@
-//! ⚠️ Hazmat:
-//! This file exposes the underlying streaming/online encryption primitive defined in the HPKE spec.
-//! Do NOT use this unless you really know what you're doing.
+//! The underlying streaming/online encryption primitive defined in the HPKE spec.
 //!
-//! Also, DO NOT use the same key for two sender contexts or two receiver contexts. Doing this can
-//! lead to reflection attacks, i.e., replaying Alice's message to Alice herself, pretending it came
-//! from Bob.
+//! DO NOT use the same key for two sender contexts or two receiver contexts. Doing this
+//! can lead to reflection attacks, i.e., replaying Alice's message to Alice herself,
+//! pretending it came from Bob.
 //!
 //! Example use:
 //! ```rust
-//! # #[cfg(feature = "alloc")] {
-//! # #[cfg(feature = "x25519")] {
+//! # #[cfg(all(feature = "alloc", feature = "x25519", feature = "mlkem"))] {
 //! # use hpke::{
 //! #     aead::ChaCha20Poly1305,
-//! #     kdf::HkdfSha384,
-//! #     kem::X25519HkdfSha256,
-//! #     streaming_enc::{
+//! #     kdf::KdfTurboShake128,
+//! #     kem::XWing,
+//! #     danger::streaming_enc::{
 //! #         create_receiver_context, create_sender_context, ExporterSecret, AeadKey,
 //! #         AeadNonce
 //! #     },
@@ -22,9 +19,9 @@
 //! # };
 //! # use rand_core::Rng;
 //! // These types define the ciphersuite Alice and Bob will be using
-//! type Kem = X25519HkdfSha256;
+//! type Kem = XWing;
 //! type Aead = ChaCha20Poly1305;
-//! type Kdf = HkdfSha384;
+//! type Kdf = KdfTurboShake128;
 //!
 //! let mut csprng = rand::rng();
 //!
@@ -64,7 +61,7 @@
 //!
 //! // Check the decrypted message was what was sent
 //! assert_eq!(&decrypted, msg);
-//! # }}
+//! # }
 //! ```
 
 use crate::{
@@ -81,7 +78,7 @@ pub use crate::setup::ExporterSecret;
 
 /// Creates a streaming encryption sender context from a key, nonce, and exporter secret.
 ///
-/// ⚠️ Warning: Hazmat!
+/// ⚠️ DANGER
 ///
 /// This is a low-level API. Only use this if you know what you are doing.
 ///
@@ -101,7 +98,7 @@ pub fn create_sender_context<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
 
 /// Creates a streaming encryption receiver context from a key, nonce, and exporter secret.
 ///
-/// ⚠️ Warning: Hazmat!
+/// ⚠️ DANGER
 ///
 /// This is a low-level API. Only use this if you know what you are doing.
 ///
@@ -114,7 +111,7 @@ pub fn create_receiver_context<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
     AeadCtx::new(key, base_nonce, exporter_secret).into()
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "alloc"))]
 mod test {
     use super::{
         create_receiver_context, create_sender_context, AeadKey, AeadNonce, ExporterSecret,
