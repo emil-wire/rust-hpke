@@ -4,9 +4,9 @@ repository = "https://github.com/rozbb/rust-hpke"
 documentation = "https://docs.rs/hpke"
 description = "An implementation of the HPKE hybrid encryption standard (RFC 9180) in pure Rust"
 readme = "README.md"
-version = "0.14.0-pre.2"
+version = "0.14.0"
 authors = ["Michael Rosenberg <michael@mrosenberg.pub>"]
-edition = "2021"
+edition = "2024"
 license = "MIT/Apache-2.0"
 keywords = ["cryptography", "crypto", "key-exchange", "encryption", "aead"]
 categories = ["cryptography", "no-std"]
@@ -45,7 +45,7 @@ p384 = { version = "0.14.0", default-features = false, features = [
     "arithmetic",
     "ecdh",
 ], optional = true }
-p521 = { version = "0.14.0-rc.15", default-features = false, features = [
+p521 = { version = "0.14.0", default-features = false, features = [
     "arithmetic",
     "ecdh",
 ], optional = true }
@@ -57,7 +57,7 @@ subtle = { version = "2.6", default-features = false }
 x25519-dalek = { version = "3.0.0", default-features = false, features = [
     "static_secrets",
 ], optional = true }
-x-wing = { version = "=0.1.0-rc.0", optional = true, default-features = false, features = ["hazmat"] }
+x-wing = { version = "0.1.0", optional = true, default-features = false, features = ["hazmat"] }
 zeroize = { version = "1", default-features = false, features = [
     "zeroize_derive",
 ] }
